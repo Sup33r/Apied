@@ -54,24 +54,16 @@
                     <dependencyReducedPomLocation>${project.build.directory}/dependency-reduced-pom.xml</dependencyReducedPomLocation>
                     <relocations>
                         <relocation>
-                            <pattern>de.tr7zw.changeme.nbtapi</pattern>
-                            <shadedPattern>live.supeer.mandatory.nbtapi</shadedPattern>
-                        </relocation>
-                        <relocation>
-                            <pattern>co.aikar.commands</pattern>
-                            <shadedPattern>live.supeer.mandatory.acf</shadedPattern>
-                        </relocation>
-                        <relocation>
                             <pattern>co.aikar.locales</pattern>
-                            <shadedPattern>live.supeer.mandatory.locales</shadedPattern>
+                            <shadedPattern>live.supeer.apied.locales</shadedPattern>
                         </relocation>
                         <relocation>
                             <pattern>co.aikar.idb</pattern>
-                            <shadedPattern>live.supeer.mandatory.idb</shadedPattern>
+                            <shadedPattern>live.supeer.apied.idb</shadedPattern>
                         </relocation>
                         <relocation>
                             <pattern>co.aikar.taskchain</pattern>
-                            <shadedPattern>live.supeer.mandatory.taskchain</shadedPattern>
+                            <shadedPattern>live.supeer.apied.taskchain</shadedPattern>
                         </relocation>
                     </relocations>
                 </configuration>
@@ -131,6 +123,11 @@
             <artifactId>taskchain-bukkit</artifactId>
             <version>3.7.2</version>
             <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>1.18.34</version>
         </dependency>
     </dependencies>
 </project>

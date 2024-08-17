@@ -1,0 +1,9 @@
+sql:
+  host:
+  port:
+  database:
+  username:
+  password:
+
+settings:
+  startingbalance: 1000
