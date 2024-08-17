@@ -1,0 +1,7 @@
+name: Apied
+version: '1.0-SNAPSHOT'
+main: live.supeer.apied.Apied
+api-version: '1.21'
+authors: [ Supeeer ]
+description: A dependency for other plugins, which handles the economy, among other things.
+website: supeer.live
