@@ -78,6 +78,16 @@ public class Database {
                                 `location` varchar(255) COLLATE utf8mb4_unicode_ci,
                                 PRIMARY KEY (`playerUUID`, `homeName`)
                               ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;""");
+            DB.executeUpdate(
+                    """
+                              CREATE TABLE IF NOT EXISTS `md_bans` (
+                                `playerUUID` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+                                `placerUUID` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+                                `placeTime` bigint(30) DEFAULT NULL,
+                                `length` bigint(30) DEFAULT NULL,
+                                `reason` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+                                PRIMARY KEY (`playerUUID`, `placeTime`)
+                              ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;""");
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }

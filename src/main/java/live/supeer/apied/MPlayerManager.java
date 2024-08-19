@@ -8,6 +8,7 @@ import org.bukkit.entity.Player;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 public class MPlayerManager {
@@ -57,12 +58,12 @@ public class MPlayerManager {
     }
 
     public static MPlayer getPlayerFromPlayer(Player player) {
-        for (MPlayer mPlayer : players) {
-            if (mPlayer.getUuid().equals(player.getUniqueId())) {
-                return mPlayer;
-            }
+        try {
+            DbRow row = DB.getFirstRow("SELECT * FROM `md_players` WHERE `uuid` = ?", player.getUniqueId().toString());
+            return row != null ? new MPlayer(row) : null;
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
         }
-        return null;
     }
 
     public static List<String> getPlayerNamesFromUUIDs(List<UUID> uuids) {
@@ -91,5 +92,75 @@ public class MPlayerManager {
             throw new RuntimeException(e);
         }
         return ignoredByPlayers;
+    }
+
+    public static void placeBan(MPlayer player, Player placer, String reason, long length) {
+        try {
+            DB.executeUpdate("INSERT INTO `md_bans` (`playerUUID`, `placerUUID`, `reason`, `placeTime`, `length`) VALUES (?, ?, ?, ?, ?)",
+                    player.getUuid(),
+                    placer.getUniqueId().toString(),
+                    reason,
+                    Utils.getTimestamp(),
+                    length);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static void removeBan(UUID playerUUID) {
+        try {
+            DB.executeUpdate("UPDATE `md_bans` SET `length` = ? WHERE `playerUUID` = ? AND `length` > ?", Utils.getTimestamp(), playerUUID.toString(), Utils.getTimestamp());
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static boolean isBanned(UUID playerUUID) {
+        try {
+            return DB.getFirstRow("SELECT * FROM `md_bans` WHERE `playerUUID` = ? AND `length` > ?", playerUUID.toString(), Utils.getTimestamp()) != null;
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static String getBanReason(UUID playerUUID) {
+        try {
+            DbRow row = DB.getFirstRow("SELECT * FROM `md_bans` WHERE `playerUUID` = ? AND `length` > ?", playerUUID.toString(), Utils.getTimestamp());
+            return row != null ? row.getString("reason") : null;
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static long getBanLength(UUID playerUUID) {
+        try {
+            DbRow row = DB.getFirstRow("SELECT * FROM `md_bans` WHERE `playerUUID` = ? AND `length` > ?", playerUUID.toString(), Utils.getTimestamp());
+            return row != null ? row.getLong("length") : 0;
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static List<ExpiringBan> getExpiringBans(long time) {
+        List<ExpiringBan> expiringBans = new ArrayList<>();
+        try {
+            for (DbRow row : DB.getResults("SELECT * FROM `md_bans` WHERE `length` < ?", time)) {
+                UUID playerUUID = UUID.fromString(row.getString("playerUUID"));
+                long unbanTime = row.getLong("length");
+                expiringBans.add(new ExpiringBan(playerUUID, unbanTime));
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+        return expiringBans;
+    }
+
+    public static ExpiringBan getExpiringBan(UUID playerUUID) {
+        try {
+            DbRow row = DB.getFirstRow("SELECT * FROM `md_bans` WHERE `playerUUID` = ? AND `length` > ?", playerUUID.toString(), Utils.getTimestamp());
+            return row != null ? new ExpiringBan(playerUUID, row.getLong("length")) : null;
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

@@ -26,6 +26,7 @@ public class MPlayer {
     private final List<Home> homes = new ArrayList<>();
     private Location lastLocation;
     private Location backLocation;
+    private boolean isBanned;
 
     public MPlayer(DbRow data) {
         this.uuid = UUID.fromString(data.getString("uuid"));
@@ -45,6 +46,7 @@ public class MPlayer {
         this.backLocation = Optional.ofNullable(data.getString("backLocation"))
                 .map(Utils::stringToLocation)
                 .orElse(null);
+        this.isBanned = MPlayerManager.isBanned(uuid);
         try {
             DB.getResults("SELECT * FROM `md_homes` WHERE `playerUUID` = " + Database.sqlString(uuid.toString())).forEach(row -> homes.add(new Home(row)));
         } catch (SQLException e) {
@@ -187,5 +189,9 @@ public class MPlayer {
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public void setBanned(boolean banned) {
+        this.isBanned = banned;
     }
 }
