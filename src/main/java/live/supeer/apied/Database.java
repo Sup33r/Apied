@@ -88,6 +88,28 @@ public class Database {
                                 `reason` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
                                 PRIMARY KEY (`playerUUID`, `placeTime`)
                               ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;""");
+            DB.executeUpdate(
+                    """
+                              CREATE TABLE IF NOT EXISTS `md_chests` (
+                                `id` int(11) NOT NULL AUTO_INCREMENT,
+                                `location` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+                                `type` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+                                `dateTime` bigint(30) DEFAULT NULL,
+                                `ownerUUID` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+                                `sharedPlayers` text COLLATE utf8mb4_unicode_ci,
+                                `shops` text COLLATE utf8mb4_unicode_ci,
+                                PRIMARY KEY (`id`)
+                              ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;""");
+            DB.executeUpdate(
+                    """
+                              CREATE TABLE IF NOT EXISTS `md_archive` (
+                                `id` int(11) NOT NULL AUTO_INCREMENT,
+                                `dateTime` bigint(30) DEFAULT NULL,
+                                `owner` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+                                `archiver` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+                                `items` text COLLATE utf8mb4_unicode_ci,
+                                PRIMARY KEY (`id`)
+                              ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;""");
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }

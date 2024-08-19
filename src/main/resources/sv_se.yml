@@ -1,0 +1,25 @@
+messages:
+  permissionDenied: "<redÅtkomst nekad.</red>"
+  chest:
+    error:
+      give:
+        unlocked: "<red>Du kan inte ge bort olåsta kistor.</red>"
+        self: "<red>Du kan inte ge bort kistor till dig själv.</red>"
+        notOwner: "<red>Du kan inte ge bort kistor som du inte äger.</red>"
+      archive:
+        unlocked: "<red>Kistan är olåst och kan därför inte arkiveras.</red>"
+      modify:
+        notOwner: "<red>Du kan inte modifiera kistor som du inte äger.</red>"
+      share:
+        notOwner: "<red>Du kan inte dela kistor som du inte äger.</red>"
+        unlocked: "<red>Du kan inte dela olåsta kistor.</red>"
+        self: "<red>Du kan inte dela kistor med dig själv.</red>"
+      unlock:
+        notOwner: "<red>Du kan inte låsa upp kistor som du inte äger.</red>"
+    lock: "<green>Kistan är nu låst.</green>"
+    unlock: "<red>Kistan är nu olåst.</red>"
+    archive: "<green>Kistan har nu arkiverats till %player%.</green>"
+    give: "<green>Kistan har nu givits till %player%.</green>"
+    share:
+      started: "<green>Du delar nu kistan med %player%.</green>"
+      stopped: "<red>Du delar inte längre kistan med %player%.</red>"

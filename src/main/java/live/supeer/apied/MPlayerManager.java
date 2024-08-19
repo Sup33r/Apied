@@ -97,7 +97,7 @@ public class MPlayerManager {
     public static void placeBan(MPlayer player, Player placer, String reason, long length) {
         try {
             DB.executeUpdate("INSERT INTO `md_bans` (`playerUUID`, `placerUUID`, `reason`, `placeTime`, `length`) VALUES (?, ?, ?, ?, ?)",
-                    player.getUuid(),
+                    player.getUuid().toString(),
                     placer.getUniqueId().toString(),
                     reason,
                     Utils.getTimestamp(),
