@@ -19,12 +19,12 @@ import java.util.*;
 
 public class ChestManager {
     private static final Map<UUID, ChestEventCount> chestEventCountMap = new HashMap<>();
-
+    public static List<Player> chestOverride = new ArrayList<>();
     public static final HashMap<UUID, Integer> chestInventories = new HashMap<>();
 
     public static live.supeer.apied.Chest getClaimedChest(Location location) {
         try {
-            DbRow row = DB.getFirstRow("SELECT * FROM `md_chests` WHERE `location` = ?", Utils.formatLocation(location));
+            DbRow row = DB.getFirstRow("SELECT * FROM `md_chests` WHERE `location` = ?", Utils.locationToString(location));
             return row != null ? new live.supeer.apied.Chest(row) : null;
         } catch (SQLException e) {
             throw new RuntimeException(e);
@@ -35,7 +35,7 @@ public class ChestManager {
         try {
             DB.executeInsert("INSERT INTO `md_chests` (`ownerUUID`, `location`, `type`, `dateTime`) VALUES (?, ?, ?, ?)",
                     player.getUniqueId().toString(),
-                    Utils.formatLocation(location),
+                    Utils.locationToString(location),
                     type,
                     Utils.getTimestamp());
         } catch (SQLException e) {
@@ -45,7 +45,7 @@ public class ChestManager {
 
     public static void removeChest(Location location) {
         try {
-            DB.executeUpdate("DELETE FROM `md_chests` WHERE `location` = ?", Utils.formatLocation(location));
+            DB.executeUpdate("DELETE FROM `md_chests` WHERE `location` = ?", Utils.locationToString(location));
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -77,7 +77,7 @@ public class ChestManager {
             return;
         }
         try {
-            DB.executeUpdate("UPDATE `md_chests` SET `ownerUUID` = ? WHERE `location` = ?", target, Utils.formatLocation(location));
+            DB.executeUpdate("UPDATE `md_chests` SET `ownerUUID` = ? WHERE `location` = ?", target, Utils.locationToString(location));
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -109,7 +109,7 @@ public class ChestManager {
         if (chest.getSharedPlayers().contains(target)) {
             sharedPlayers.remove(target);
             try {
-                DB.executeUpdate("UPDATE `md_chests` SET `sharedPlayers` = ? WHERE `location` = ?", Utils.uuidListToString(sharedPlayers), Utils.formatLocation(location));
+                DB.executeUpdate("UPDATE `md_chests` SET `sharedPlayers` = ? WHERE `location` = ?", Utils.uuidListToString(sharedPlayers), Utils.locationToString(location));
             } catch (SQLException e) {
                 throw new RuntimeException(e);
             }
@@ -118,7 +118,7 @@ public class ChestManager {
         }
         sharedPlayers.add(target);
         try {
-            DB.executeUpdate("UPDATE `md_chests` SET `sharedPlayers` = ? WHERE `location` = ?", Utils.uuidListToString(sharedPlayers), Utils.formatLocation(location));
+            DB.executeUpdate("UPDATE `md_chests` SET `sharedPlayers` = ? WHERE `location` = ?", Utils.uuidListToString(sharedPlayers), Utils.locationToString(location));
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -217,10 +217,14 @@ public class ChestManager {
             }
             if (chest1.getOwnerUUID().equals(archiver.getUniqueId()) && self) {
                 archiveInventory(archiver.getUniqueId(), mPlayer.getUuid(), inventory);
+                chest.getInventory().clear();
+                removeChest(chest1.getLocation());
                 Apied.sendMessage(archiver, "messages.chest.archive", "%player%", mPlayer.getName());
                 return;
             } else if (city) {
                 archiveInventory(archiver.getUniqueId(), mPlayer.getUuid(), inventory);
+                chest.getInventory().clear();
+                removeChest(chest1.getLocation());
                 Apied.sendMessage(archiver, "messages.chest.archive", "%player%", mPlayer.getName());
                 return;
             }
@@ -239,10 +243,14 @@ public class ChestManager {
             }
             if (chest.getOwnerUUID().equals(archiver.getUniqueId()) && self) {
                 archiveInventory(archiver.getUniqueId(), mPlayer.getUuid(), barrel.getInventory());
+                barrel.getInventory().clear();
+                removeChest(chest.getLocation());
                 Apied.sendMessage(archiver, "messages.chest.archive", "%player%", mPlayer.getName());
                 return;
             } else if (city) {
                 archiveInventory(archiver.getUniqueId(), mPlayer.getUuid(), barrel.getInventory());
+                barrel.getInventory().clear();
+                removeChest(chest.getLocation());
                 Apied.sendMessage(archiver, "messages.chest.archive", "%player%", mPlayer.getName());
                 return;
             }
@@ -261,10 +269,14 @@ public class ChestManager {
             }
             if (chest.getOwnerUUID().equals(archiver.getUniqueId()) && self) {
                 archiveInventory(archiver.getUniqueId(), mPlayer.getUuid(), shulkerBox.getInventory());
+                shulkerBox.getInventory().clear();
+                removeChest(chest.getLocation());
                 Apied.sendMessage(archiver, "messages.chest.archive", "%player%", mPlayer.getName());
                 return;
             } else if (city) {
                 archiveInventory(archiver.getUniqueId(), mPlayer.getUuid(), shulkerBox.getInventory());
+                shulkerBox.getInventory().clear();
+                removeChest(chest.getLocation());
                 Apied.sendMessage(archiver, "messages.chest.archive", "%player%", mPlayer.getName());
                 return;
             }
@@ -274,7 +286,7 @@ public class ChestManager {
 
     public static void archiveInventory(UUID archiver, UUID owner, Inventory inventory) {
         try {
-            DB.executeInsert("INSERT INTO `md_archives` (`archiver`, `owner`, `items`, `dateTime`) VALUES (?, ?, ?, ?)",
+            DB.executeInsert("INSERT INTO `md_archive` (`archiver`, `owner`, `items`, `dateTime`) VALUES (?, ?, ?, ?)",
                     archiver.toString(),
                     owner.toString(),
                     Utils.toBase64(inventory),
@@ -285,7 +297,7 @@ public class ChestManager {
     }
     public static int getFirstArchiveId(UUID playerUUID) {
         try {
-            DbRow row = DB.getFirstRow("SELECT * FROM `md_archives` WHERE `owner` = ? ORDER BY `dateTime` ASC LIMIT 1", playerUUID.toString());
+            DbRow row = DB.getFirstRow("SELECT * FROM `md_archive` WHERE `owner` = ? ORDER BY `dateTime` ASC LIMIT 1", playerUUID.toString());
             return row != null ? row.getInt("id") : -1;
         } catch (SQLException e) {
             throw new RuntimeException(e);
@@ -294,7 +306,7 @@ public class ChestManager {
 
     public static boolean hasArchivedItems(UUID playerUUID) {
         try {
-            return DB.getFirstRow("SELECT * FROM `md_archives` WHERE `owner` = ?", playerUUID.toString()) != null;
+            return DB.getFirstRow("SELECT * FROM `md_archive` WHERE `owner` = ?", playerUUID.toString()) != null;
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -302,7 +314,7 @@ public class ChestManager {
 
     public static Inventory getInventoryFromArchive(int id) {
         try {
-            DbRow row = DB.getFirstRow("SELECT * FROM `md_archives` WHERE `id` = ?", id);
+            DbRow row = DB.getFirstRow("SELECT * FROM `md_archive` WHERE `id` = ?", id);
             if (row == null) {
                 return null;
             }
@@ -313,7 +325,7 @@ public class ChestManager {
     }
     public static void removeArchive(int id) {
         try {
-            DB.executeUpdate("DELETE FROM `md_archives` WHERE `id` = ?", id);
+            DB.executeUpdate("DELETE FROM `md_archive` WHERE `id` = ?", id);
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }

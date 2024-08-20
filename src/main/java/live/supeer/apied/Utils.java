@@ -2,6 +2,7 @@ package live.supeer.apied;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.util.io.BukkitObjectInputStream;
@@ -27,15 +28,6 @@ public class Utils {
                 + ", "
                 + location.getBlockZ()
                 + ")";
-    }
-
-    public static Location unformatLocation(String location) {
-        String[] split = location.split("[\\[\\],]");
-        return new Location(
-                Bukkit.getWorld(split[1]),
-                Double.parseDouble(split[2]),
-                Double.parseDouble(split[3]),
-                Double.parseDouble(split[4]));
     }
 
     public static String locationToString(Location location) {
