@@ -84,6 +84,27 @@ public class Utils {
         return playerString.toString();
     }
 
+    public static List<Location> stringToLocationList(String locationString) {
+        List<Location> locations = new ArrayList<>();
+        if (locationString == null || locationString.isEmpty()) {
+            return locations;
+        }
+        String[] locationArray = locationString.split(",");
+        for (String location : locationArray) {
+            locations.add(stringToLocation(location));
+        }
+        return locations;
+    }
+
+
+    public static String locationListToString(List<Location> locations) {
+        StringBuilder locationString = new StringBuilder();
+        for (Location location : locations) {
+            locationString.append(location.toString()).append(",");
+        }
+        return locationString.toString();
+    }
+
     public static long getTimestamp() {
         return System.currentTimeMillis() / 1000L;
     }
@@ -124,6 +145,45 @@ public class Utils {
             return inventory;
         } catch (ClassNotFoundException e) {
             throw new IOException("Unable to decode class type.", e);
+        }
+    }
+
+    public static ItemStack[] itemStackArrayFromBase64(String data) throws IOException {
+        try {
+            ByteArrayInputStream inputStream = new ByteArrayInputStream(Base64Coder.decodeLines(data));
+            BukkitObjectInputStream dataInput = new BukkitObjectInputStream(inputStream);
+            ItemStack[] items = new ItemStack[dataInput.readInt()];
+
+            // Read the serialized inventory
+            for (int i = 0; i < items.length; i++) {
+                items[i] = (ItemStack) dataInput.readObject();
+            }
+
+            dataInput.close();
+            return items;
+        } catch (ClassNotFoundException e) {
+            throw new IOException("Unable to decode class type.", e);
+        }
+    }
+
+    public static String itemStackArrayToBase64(ItemStack[] items) throws IllegalStateException {
+        try {
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            BukkitObjectOutputStream dataOutput = new BukkitObjectOutputStream(outputStream);
+
+            // Write the size of the inventory
+            dataOutput.writeInt(items.length);
+
+            // Save every element in the list
+            for (int i = 0; i < items.length; i++) {
+                dataOutput.writeObject(items[i]);
+            }
+
+            // Serialize that array
+            dataOutput.close();
+            return Base64Coder.encodeLines(outputStream.toByteArray());
+        } catch (Exception e) {
+            throw new IllegalStateException("Unable to save item stacks.", e);
         }
     }
 }

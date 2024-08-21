@@ -110,6 +110,32 @@ public class Database {
                                 `items` text COLLATE utf8mb4_unicode_ci,
                                 PRIMARY KEY (`id`)
                               ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;""");
+            DB.executeUpdate(
+                    """
+                              CREATE TABLE IF NOT EXISTS `md_shops` (
+                                `id` int(11) NOT NULL AUTO_INCREMENT,
+                                `ownerUUID` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+                                `signLocation` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+                                `chestLocations` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+                                `type` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+                                `maxPlayerUses` smallint(6) DEFAULT NULL,
+                                `maxDailyUses` smallint(6) DEFAULT NULL,
+                                `maxUses` smallint(6) DEFAULT NULL,
+                                `dateTime` bigint(30) DEFAULT NULL,
+                                `balance` bigint(30) DEFAULT NULL,
+                                `items` text COLLATE utf8mb4_unicode_ci,
+                                `removed` tinyint(1) DEFAULT '0',
+                                PRIMARY KEY (`id`)
+                              ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;""");
+            DB.executeUpdate(
+                    """
+                              CREATE TABLE IF NOT EXISTS `md_shoptransactions` (
+                                `id` int(11) NOT NULL AUTO_INCREMENT,
+                                `shopId` int(11) NOT NULL,
+                                `uuid` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+                                `dateTime` bigint(30) DEFAULT NULL,
+                                PRIMARY KEY (`id`)
+                              ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;""");
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
