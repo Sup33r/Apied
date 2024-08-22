@@ -3,14 +3,13 @@ package live.supeer.apied;
 import co.aikar.idb.DB;
 import co.aikar.idb.DbRow;
 import org.bukkit.Location;
-import org.bukkit.block.Barrel;
-import org.bukkit.block.Block;
-import org.bukkit.block.ShulkerBox;
-import org.bukkit.block.Sign;
+import org.bukkit.block.*;
 import org.bukkit.block.sign.Side;
 import org.bukkit.block.sign.SignSide;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.DoubleChestInventory;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.ArrayList;
@@ -43,6 +42,43 @@ public class ShopManager {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public static void handleChestClick(Location location, Player player) {
+
+    }
+
+    public static boolean validChest(Location location, Player player) {
+        Block block = location.getBlock();
+        Inventory inventory = null;
+
+        if (block.getState() instanceof org.bukkit.block.Chest chest) {
+            inventory = chest.getInventory();
+        } else if (block.getState() instanceof ShulkerBox shulkerBox) {
+            inventory = shulkerBox.getInventory();
+        } else if (block.getState() instanceof Barrel barrel) {
+            inventory = barrel.getInventory();
+        } else if (block.getState() instanceof DoubleChest doubleChest) {
+            inventory = doubleChest.getInventory();
+        }
+
+        if (inventory == null) {
+            return false;
+        }
+
+        Chest chest = ChestManager.getClaimedChest(location);
+        if (chest == null || !chest.getOwnerUUID().equals(player.getUniqueId())) {
+            return false;
+        }
+
+        int itemCount = 0;
+        for (ItemStack item : inventory.getContents()) {
+            if (item != null) {
+                itemCount++;
+            }
+        }
+
+        return itemCount > 9;
     }
 
     public static boolean validSign(Sign sign) {
@@ -97,5 +133,29 @@ public class ShopManager {
             return Utils.itemStackArrayToBase64(inventory.getContents());
         }
         return null;
+    }
+
+    public static boolean hasRequiredItems(Player player, ItemStack[] requiredItems) {
+        return hasRequiredItemsInChest(player, requiredItems);
+    }
+
+    public static boolean hasRequiredItemsInChest(InventoryHolder chest, ItemStack[] requiredItems) {
+        Inventory inventory = chest.getInventory();
+        for (ItemStack requiredItem : requiredItems) {
+            if (!inventory.containsAtLeast(requiredItem, requiredItem.getAmount())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public static boolean hasEnoughStorageInChest(InventoryHolder chest, ItemStack[] itemsToStore) {
+        Inventory inventory = chest.getInventory();
+        for (ItemStack item : itemsToStore) {
+            if (inventory.firstEmpty() == -1 && !inventory.containsAtLeast(item, item.getAmount())) {
+                return false;
+            }
+        }
+        return true;
     }
 }

@@ -7,3 +7,6 @@ sql:
 
 settings:
   startingbalance: 1000
+
+  shop:
+    maxitems: 9

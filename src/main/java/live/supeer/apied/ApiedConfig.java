@@ -16,6 +16,8 @@ public class ApiedConfig {
 
     private final int startingBalance;
 
+    private final int shopMaxItems;
+
     ApiedConfig(Apied plugin) {
         plugin.saveDefaultConfig();
         plugin.reloadConfig();
@@ -27,6 +29,8 @@ public class ApiedConfig {
         sqlPassword = plugin.getConfig().getString("sql.password");
 
         startingBalance = plugin.getConfig().getInt("settings.startingbalance");
+
+        shopMaxItems = plugin.getConfig().getInt("settings.shop.maxitems");
     }
 
 }
