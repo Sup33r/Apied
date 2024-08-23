@@ -10,3 +10,7 @@ settings:
 
   shop:
     maxitems: 9
+
+    bannedpreviewitems:
+      - "minecraft:written_book"
+      - "minecraft:writable_book"

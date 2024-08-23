@@ -17,6 +17,7 @@ public class ApiedConfig {
     private final int startingBalance;
 
     private final int shopMaxItems;
+    private final List<String> bannedPreviewItems;
 
     ApiedConfig(Apied plugin) {
         plugin.saveDefaultConfig();
@@ -31,6 +32,7 @@ public class ApiedConfig {
         startingBalance = plugin.getConfig().getInt("settings.startingbalance");
 
         shopMaxItems = plugin.getConfig().getInt("settings.shop.maxitems");
+        bannedPreviewItems = plugin.getConfig().getStringList("settings.shop.bannedpreviewitems");
     }
 
 }

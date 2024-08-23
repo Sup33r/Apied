@@ -12,11 +12,19 @@ import org.yaml.snakeyaml.external.biz.base64Coder.Base64Coder;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 public class Utils {
+
+    public static String formattedMoney(Integer money) {
+        NumberFormat formatter = NumberFormat.getInstance(Locale.US);
+        formatter.setGroupingUsed(true);
+        return formatter.format(money).replace(",", " ");
+    }
 
     public static String formatLocation(Location location) {
         return "(["
