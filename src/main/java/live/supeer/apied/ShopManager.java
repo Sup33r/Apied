@@ -7,7 +7,6 @@ import org.bukkit.block.*;
 import org.bukkit.block.sign.Side;
 import org.bukkit.block.sign.SignSide;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.DoubleChestInventory;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
@@ -44,7 +43,32 @@ public class ShopManager {
         }
     }
 
-    public static void handleChestClick(Location location, Player player) {
+    public static void handleChestClick(Player player, Location chestLocation, Location signLocation) {
+        //Check if clicked chest is a doublechest, is so get the left chest
+        if (chestLocation.getBlock().getState() instanceof DoubleChest doubleChest) {
+            chestLocation = ((Chest) doubleChest.getLeftSide()).getLocation();
+        } else {
+            chestLocation = chestLocation.getBlock().getLocation();
+        }
+
+        Chest chest = ChestManager.getClaimedChest(chestLocation);
+        if (chest == null) {
+            Apied.sendMessage(player, "messages.chest.error.notFound");
+            return;
+        }
+        if (!validChest(chestLocation, player)) {
+            return;
+        }
+        String serializedItems = serializeItems(chestLocation);
+        Sign sign = signLocation.getBlock().getState() instanceof Sign ? (Sign) signLocation.getBlock().getState() : null;
+        if (sign == null) {
+            Apied.sendMessage(player, "messages.shop.error.signNotFound");
+            return;
+        }
+        if (!validSign(sign)) {
+            Apied.sendMessage(player, "messages.shop.error.invalidSign");
+            return;
+        }
 
     }
 
@@ -63,11 +87,13 @@ public class ShopManager {
         }
 
         if (inventory == null) {
+            Apied.sendMessage(player, "messages.chest.error.notFound");
             return false;
         }
 
         Chest chest = ChestManager.getClaimedChest(location);
         if (chest == null || !chest.getOwnerUUID().equals(player.getUniqueId())) {
+            Apied.sendMessage(player, "messages.chest.error.modify.notOwner");
             return false;
         }
 
@@ -77,8 +103,11 @@ public class ShopManager {
                 itemCount++;
             }
         }
-
-        return itemCount > 9;
+        if (itemCount > Apied.configuration.getShopMaxItems()) {
+            Apied.sendMessage(player, "messages.shop.error.tooManyItems", "%max%", String.valueOf(Apied.configuration.getShopMaxItems()));
+            return false;
+        }
+        return true;
     }
 
     public static boolean validSign(Sign sign) {

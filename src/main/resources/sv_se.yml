@@ -1,7 +1,13 @@
 messages:
   permissionDenied: "<redÅtkomst nekad.</red>"
+  shop:
+    error:
+      signNotFound: "<red>Skylten kunde inte hittas.</red>"
+      invalidSign: "<red>Skylten är ogiltig.</red>"
+      tooManyItems: "<red>En kistaffär kan inte ha mer än %max% föremål.</red>"
   chest:
     error:
+      notFound: "<red>Kistan kunde inte hittas.</red>"
       give:
         unlocked: "<red>Du kan inte ge bort olåsta kistor.</red>"
         self: "<red>Du kan inte ge bort kistor till dig själv.</red>"
