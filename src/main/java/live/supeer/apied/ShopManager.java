@@ -199,6 +199,34 @@ public class ShopManager {
                 sendConfirmationMessage(player, chestShop);
                 return;
             }
+            if (chestShop.getMaxUses() != 0) {
+                if (totalShopUses(chestShop.getId()) >= chestShop.getMaxUses()) {
+                    Apied.sendMessage(player, "messages.shop.error.maxUses");
+                    formatSign(sign, chestShop);
+                    return;
+                }
+            }
+            if (chestShop.getMaxDailyUses() != 0) {
+                if (totalDailyShopUses(chestShop.getId()) >= chestShop.getMaxDailyUses()) {
+                    Apied.sendMessage(player, "messages.shop.error.maxDailyUses");
+                    formatSign(sign, chestShop);
+                    return;
+                }
+            }
+            if (chestShop.getMaxPlayerUses() != 0) {
+                if (playerShopUses(player.getUniqueId(), chestShop.getId()) >= chestShop.getMaxPlayerUses()) {
+                    Apied.sendMessage(player, "messages.shop.error.maxPlayerUses");
+                    formatSign(sign, chestShop);
+                    return;
+                }
+            }
+            if (chestShop.getMaxPlayerDailyUses() != 0) {
+                if (playerDailyShopUses(player.getUniqueId(), chestShop.getId()) >= chestShop.getMaxPlayerDailyUses()) {
+                    Apied.sendMessage(player, "messages.shop.error.maxDailyPlayerUses");
+                    formatSign(sign, chestShop);
+                    return;
+                }
+            }
             if (chestShop.getType().equals("BUY")) {
                 if (!hasRequiredItemsInChests(chestShop.getChestLocations(), chestShop.getItems())) {
                     Apied.sendMessage(player, "messages.shop.error.missingItems");
@@ -209,34 +237,6 @@ public class ShopManager {
                     Apied.sendMessage(player, "messages.shop.error.fullInventory");
                     formatSign(sign, chestShop);
                     return;
-                }
-                if (chestShop.getMaxUses() != 0) {
-                    if (totalShopUses(chestShop.getId()) >= chestShop.getMaxUses()) {
-                        Apied.sendMessage(player, "messages.shop.error.maxUses");
-                        formatSign(sign, chestShop);
-                        return;
-                    }
-                }
-                if (chestShop.getMaxDailyUses() != 0) {
-                    if (totalDailyShopUses(chestShop.getId()) >= chestShop.getMaxDailyUses()) {
-                        Apied.sendMessage(player, "messages.shop.error.maxDailyUses");
-                        formatSign(sign, chestShop);
-                        return;
-                    }
-                }
-                if (chestShop.getMaxPlayerUses() != 0) {
-                    if (playerShopUses(player.getUniqueId(), chestShop.getId()) >= chestShop.getMaxPlayerUses()) {
-                        Apied.sendMessage(player, "messages.shop.error.maxPlayerUses");
-                        formatSign(sign, chestShop);
-                        return;
-                    }
-                }
-                if (chestShop.getMaxPlayerDailyUses() != 0) {
-                    if (playerDailyShopUses(player.getUniqueId(), chestShop.getId()) >= chestShop.getMaxPlayerDailyUses()) {
-                        Apied.sendMessage(player, "messages.shop.error.maxDailyPlayerUses");
-                        formatSign(sign, chestShop);
-                        return;
-                    }
                 }
                 MPlayer mPlayer = MPlayerManager.getPlayerFromPlayer(player);
                 if (mPlayer == null) {
@@ -254,6 +254,21 @@ public class ShopManager {
                     formatSign(sign, chestShop);
                     return;
                 }
+                if (!hasRequiredItems(player, chestShop.getItems())) {
+                    Apied.sendMessage(player, "messages.shop.error.missingInventory");
+                    formatSign(sign, chestShop);
+                    return;
+                }
+                MPlayer mPlayer = MPlayerManager.getPlayerFromUUID(chestShop.getOwnerUUID());
+                if (mPlayer == null) {
+                    return;
+                }
+                if (chestShop.getPrice() > mPlayer.getBalance()) {
+                    Apied.sendMessage(player, "messages.shop.error.ownerInsufficientFunds");
+                    formatSign(sign, chestShop);
+                    return;
+                }
+                sellItems(player, chestShop);
             }
         } else if (shopEventCount.getType().equals("maxUses")) {
 
