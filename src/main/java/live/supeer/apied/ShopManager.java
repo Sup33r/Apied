@@ -4,8 +4,8 @@ import co.aikar.idb.DB;
 import co.aikar.idb.DbRow;
 import de.tr7zw.changeme.nbtapi.NBT;
 import de.tr7zw.changeme.nbtapi.iface.ReadableNBT;
+import lombok.Getter;
 import net.kyori.adventure.text.TextComponent;
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.*;
@@ -20,6 +20,7 @@ import java.util.*;
 
 public class ShopManager {
     public static final HashMap<UUID, Integer> shopConfirmation = new HashMap<>();
+    private static final Map<UUID, ShopEventCount> shopEventCountMap = new HashMap<>();
     public static final HashMap<UUID, Location> shopCreation = new HashMap<>();
 
     public static void newShop(Sign sign, Player player, Chest chest, int balance, String type) {
@@ -31,6 +32,38 @@ public class ShopManager {
         try {
             DB.executeInsert("INSERT INTO md_shops (ownerUUID, signLocation, chestLocations, dateTime, balance, items, type) VALUES (?, ?, ?, ?, ?, ?, ?)",
                     player.getUniqueId().toString(), Utils.locationToString(signLocation), chestLocations, Utils.getTimestamp(), balance, serializedItems, type);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+    public static int playerShopUses(UUID playerUUID, int shopId) {
+        try {
+            return DB.getResults("SELECT * FROM md_shoptransactions WHERE uuid = ? AND shopId = ?", playerUUID.toString(), shopId).size();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static int playerDailyShopUses(UUID playerUUID, int shopId) {
+        try {
+            return DB.getResults("SELECT * FROM md_shoptransactions WHERE uuid = ? AND shopId = ? AND dateTime > CURDATE()",
+                    playerUUID.toString(), shopId).size();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static int totalDailyShopUses(int shopId) {
+        try {
+            return DB.getResults("SELECT * FROM md_shoptransactions WHERE shopId = ? AND dateTime > CURDATE()", shopId).size();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static int totalShopUses(int shopId) {
+        try {
+            return DB.getResults("SELECT * FROM md_shoptransactions WHERE shopId = ?", shopId).size();
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -82,9 +115,9 @@ public class ShopManager {
             int balance = getBalance(sign);
             formatSign(sign, null);
             if (Objects.equals(getType(sign), "BUY")) {
-                Apied.sendMessage(player, "messages.shop.success.create.buy", "%items%", itemsFormatting(chestLocation, balance));
+                Apied.sendMessage(player, "messages.shop.success.create.buy", "%items%", chestFormatting(chestLocation, balance));
             } else {
-                Apied.sendMessage(player, "messages.shop.success.create.sell", "%items%", itemsFormatting(chestLocation, balance));
+                Apied.sendMessage(player, "messages.shop.success.create.sell", "%items%", chestFormatting(chestLocation, balance));
             }
         } else {
             if (chestShop.getChestLocations().size() >= Apied.configuration.getShopMaxChests()) {
@@ -147,14 +180,129 @@ public class ShopManager {
                         chest.removeShop(chestShop.getId());
                     }
                 }
-                DB.executeUpdate("UPDATE md_shops SET removed = ? WHERE id = ?", true, chestShop.getId());
+                chestShop.setRemoved(true);
             }
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
 
-    public static String itemsFormatting(Location chestLocation, int price) {
+    public static void handleSignClick(Player player, Sign sign, Side clickedSide) {
+        ChestShop chestShop = getShopFromSign(sign);
+        if (chestShop == null || chestShop.isRemoved() || !(chestShop.getSignSide() == clickedSide)) {
+            return;
+        }
+        ShopEventCount shopEventCount = shopEventCountMap.get(player.getUniqueId());
+        if (shopEventCount == null) {
+            if (!shopConfirmation.containsKey(player.getUniqueId()) || !shopConfirmation.get(player.getUniqueId()).equals(chestShop.getId())) {
+                shopConfirmation.put(player.getUniqueId(), chestShop.getId());
+                sendConfirmationMessage(player, chestShop);
+                return;
+            }
+            if (chestShop.getType().equals("BUY")) {
+                if (!hasRequiredItemsInChests(chestShop.getChestLocations(), chestShop.getItems())) {
+                    Apied.sendMessage(player, "messages.shop.error.missingItems");
+                    formatSign(sign, chestShop);
+                    return;
+                }
+                if (!hasEnoughInventorySpace(player, chestShop.getItems())) {
+                    Apied.sendMessage(player, "messages.shop.error.fullInventory");
+                    formatSign(sign, chestShop);
+                    return;
+                }
+                if (chestShop.getMaxUses() != 0) {
+                    if (totalShopUses(chestShop.getId()) >= chestShop.getMaxUses()) {
+                        Apied.sendMessage(player, "messages.shop.error.maxUses");
+                        formatSign(sign, chestShop);
+                        return;
+                    }
+                }
+                if (chestShop.getMaxDailyUses() != 0) {
+                    if (totalDailyShopUses(chestShop.getId()) >= chestShop.getMaxDailyUses()) {
+                        Apied.sendMessage(player, "messages.shop.error.maxDailyUses");
+                        formatSign(sign, chestShop);
+                        return;
+                    }
+                }
+                if (chestShop.getMaxPlayerUses() != 0) {
+                    if (playerShopUses(player.getUniqueId(), chestShop.getId()) >= chestShop.getMaxPlayerUses()) {
+                        Apied.sendMessage(player, "messages.shop.error.maxPlayerUses");
+                        formatSign(sign, chestShop);
+                        return;
+                    }
+                }
+                if (chestShop.getMaxPlayerDailyUses() != 0) {
+                    if (playerDailyShopUses(player.getUniqueId(), chestShop.getId()) >= chestShop.getMaxPlayerDailyUses()) {
+                        Apied.sendMessage(player, "messages.shop.error.maxDailyPlayerUses");
+                        formatSign(sign, chestShop);
+                        return;
+                    }
+                }
+                MPlayer mPlayer = MPlayerManager.getPlayerFromPlayer(player);
+                if (mPlayer == null) {
+                    return;
+                }
+                if (chestShop.getPrice() > mPlayer.getBalance()) {
+                    Apied.sendMessage(player, "messages.shop.error.insufficientFunds");
+                    formatSign(sign, chestShop);
+                    return;
+                }
+                buyItems(player, chestShop);
+            } else if (chestShop.getType().equals("SELL")) {
+                if (!hasEnoughStorageInChests(chestShop.getChestLocations(), chestShop.getItems())) {
+                    Apied.sendMessage(player, "messages.shop.error.noSpace");
+                    formatSign(sign, chestShop);
+                    return;
+                }
+            }
+        } else if (shopEventCount.getType().equals("maxUses")) {
+
+        } else if (shopEventCount.getType().equals("maxPlayerUses")) {
+
+        } else if (shopEventCount.getType().equals("maxDailyUses")) {
+
+        }
+
+    }
+
+    public static void buyItems(Player player, ChestShop chestShop) {
+
+    }
+
+    public static void sellItems(Player player, ChestShop chestShop) {
+
+    }
+
+    public static void sendConfirmationMessage(Player player, ChestShop chestShop) {
+        if (chestShop.getItems().length == 1) {
+            if (chestShop.getType().equals("BUY")) {
+                Apied.sendMessage(player,"messages.shop.confirm.buy.single", "%item%", itemFormatting(chestShop.getItems()[0]), "%price%", Utils.formattedMoney(chestShop.getPrice()));
+            } else if (chestShop.getType().equals("SELL")) {
+                Apied.sendMessage(player,"messages.shop.confirm.sell.single", "%item%", itemFormatting(chestShop.getItems()[0]), "%price%", Utils.formattedMoney(chestShop.getPrice()));
+            }
+        } else {
+            if (chestShop.getType().equals("BUY")) {
+                Apied.sendMessage(player,"messages.shop.confirm.buy.multiple", "%items%", itemsFormatting(chestShop.getItems(), chestShop.getPrice()));
+            } else if (chestShop.getType().equals("SELL")) {
+                Apied.sendMessage(player,"messages.shop.confirm.sell.multiple", "%items%", itemsFormatting(chestShop.getItems(), chestShop.getPrice()));
+            }
+        }
+    }
+
+    public static String itemFormatting(ItemStack item) {
+        String itemName = item.getType().getKey().getKey();
+        String translatable = item.getType().isBlock()
+                ? "<lang:block.minecraft." + itemName + ">"
+                : "<lang:item.minecraft." + itemName + ">";
+        String hoverInfo = getHoverInfo(item);
+        String plural = item.getAmount() == 1
+                ? Apied.getMessage("messages.word.count.singular")
+                : Apied.getMessage("messages.word.count.plural");
+
+            return "   " + item.getAmount() + " " + plural + " " + hoverInfo + translatable + "</hover>\n";
+    }
+
+    public static String chestFormatting(Location chestLocation, int price)  {
         Block block = chestLocation.getBlock();
         Inventory inventory = null;
 
@@ -171,39 +319,48 @@ public class ShopManager {
         if (inventory == null) {
             return "Invalid container";
         }
+        return itemsFormatting(inventory.getContents(), price);
+    }
 
-        Map<String, ItemStack> itemMap = new HashMap<>();
-        for (ItemStack item : inventory.getContents()) {
+    public static String itemsFormatting(ItemStack[] itemStacks, int price) {
+        Map<String, List<ItemStack>> itemMap = new HashMap<>();
+        for (ItemStack item : itemStacks) {
             if (item != null && item.getType() != Material.AIR) {
                 String key = getItemKey(item);
-                ItemStack existingItem = itemMap.get(key);
-                if (existingItem == null) {
-                    itemMap.put(key, item.clone());
-                } else {
-                    existingItem.setAmount(existingItem.getAmount() + item.getAmount());
-                }
+                itemMap.computeIfAbsent(key, k -> new ArrayList<>()).add(item.clone());
             }
         }
         StringBuilder formattedItems = new StringBuilder();
-        for (ItemStack item : itemMap.values()) {
-            String itemName = item.getType().getKey().getKey();
-            String translatable = "";
-            if (!item.getType().isBlock()) {
-                translatable = "<lang:item.minecraft." + itemName + ">";
-            } else {
-                translatable = "<lang:block.minecraft." + itemName + ">";
+        for (List<ItemStack> items : itemMap.values()) {
+            Map<Integer, Integer> stackSizes = new HashMap<>();
+            for (ItemStack item : items) {
+                stackSizes.merge(item.getAmount(), 1, Integer::sum);
             }
-            String hoverInfo = getHoverInfo(item);
-            String plural = item.getAmount() == 1 ? Apied.getMessage("messages.word.count.singular") : Apied.getMessage("messages.word.count.plural");
 
-            formattedItems.append("   ")
-                    .append(item.getAmount())
-                    .append(" ")
-                    .append(plural)
-                    .append(" ")
-                    .append(hoverInfo)
-                    .append(translatable)
-                    .append("</hover>\n");
+            for (Map.Entry<Integer, Integer> entry : stackSizes.entrySet()) {
+                int stackSize = entry.getKey();
+                int count = entry.getValue();
+                ItemStack representativeItem = items.getFirst().clone();
+                representativeItem.setAmount(stackSize);
+
+                String itemName = representativeItem.getType().getKey().getKey();
+                String translatable = representativeItem.getType().isBlock()
+                        ? "<lang:block.minecraft." + itemName + ">"
+                        : "<lang:item.minecraft." + itemName + ">";
+                String hoverInfo = getHoverInfo(representativeItem);
+                String plural = stackSize == 1
+                        ? Apied.getMessage("messages.word.count.singular")
+                        : Apied.getMessage("messages.word.count.plural");
+
+                formattedItems.append("   ")
+                        .append(stackSize * count)
+                        .append(" ")
+                        .append(plural)
+                        .append(" ")
+                        .append(hoverInfo)
+                        .append(translatable)
+                        .append("</hover>\n");
+            }
         }
 
         // Remove the last newline character
@@ -435,8 +592,18 @@ public class ShopManager {
 
     public static boolean hasRequiredItemsInChest(InventoryHolder chest, ItemStack[] requiredItems) {
         Inventory inventory = chest.getInventory();
+        Map<Material, Integer> inventoryItemsCount = new HashMap<>();
+
+        for (ItemStack item : inventory.getContents()) {
+            if (item != null && item.getType() != Material.AIR) {
+                inventoryItemsCount.put(item.getType(), inventoryItemsCount.getOrDefault(item.getType(), 0) + item.getAmount());
+            }
+        }
+
         for (ItemStack requiredItem : requiredItems) {
-            if (!inventory.containsAtLeast(requiredItem, requiredItem.getAmount())) {
+            int requiredAmount = requiredItem.getAmount();
+            int inventoryAmount = inventoryItemsCount.getOrDefault(requiredItem.getType(), 0);
+            if (inventoryAmount < requiredAmount) {
                 return false;
             }
         }
@@ -446,72 +613,138 @@ public class ShopManager {
     public static boolean hasRequiredItemsInChests(List<Location> chestLocations, ItemStack[] requiredItems) {
         for (Location chestLocation : chestLocations) {
             Block block = chestLocation.getBlock();
-            if (block.getState() instanceof org.bukkit.block.Chest chest) {
-                Inventory inventory = chest.getInventory();
-                for (ItemStack requiredItem : requiredItems) {
-                    if (!inventory.containsAtLeast(requiredItem, requiredItem.getAmount())) {
-                        return false;
-                    }
-                }
+            InventoryHolder chest = null;
+
+            if (block.getState() instanceof org.bukkit.block.Chest) {
+                chest = (org.bukkit.block.Chest) block.getState();
+            } else if (block.getState() instanceof ShulkerBox) {
+                chest = (ShulkerBox) block.getState();
+            } else if (block.getState() instanceof Barrel) {
+                chest = (Barrel) block.getState();
             }
-            if (block.getState() instanceof ShulkerBox shulkerBox) {
-                Inventory inventory = shulkerBox.getInventory();
-                for (ItemStack requiredItem : requiredItems) {
-                    if (!inventory.containsAtLeast(requiredItem, requiredItem.getAmount())) {
-                        return false;
-                    }
-                }
-            }
-            if (block.getState() instanceof Barrel barrel) {
-                Inventory inventory = barrel.getInventory();
-                for (ItemStack requiredItem : requiredItems) {
-                    if (!inventory.containsAtLeast(requiredItem, requiredItem.getAmount())) {
-                        return false;
-                    }
-                }
+
+            if (chest != null && hasRequiredItemsInChest(chest, requiredItems)) {
+                return true;
             }
         }
-        return true;
+        return false;
     }
+
 
     public static boolean hasEnoughStorageInChest(InventoryHolder chest, ItemStack[] itemsToStore) {
         Inventory inventory = chest.getInventory();
+        Map<Material, Integer> requiredCounts = new HashMap<>();
+
         for (ItemStack item : itemsToStore) {
-            if (inventory.firstEmpty() == -1 && !inventory.containsAtLeast(item, item.getAmount())) {
-                return false;
+            requiredCounts.put(item.getType(), requiredCounts.getOrDefault(item.getType(), 0) + item.getAmount());
+        }
+
+        for (Map.Entry<Material, Integer> entry : requiredCounts.entrySet()) {
+            Material material = entry.getKey();
+            int requiredAmount = entry.getValue();
+
+            for (ItemStack inventoryItem : inventory.getContents()) {
+                if (inventoryItem != null && inventoryItem.getType() == material) {
+                    int availableSpace = inventoryItem.getMaxStackSize() - inventoryItem.getAmount();
+                    requiredAmount -= availableSpace;
+                    if (requiredAmount <= 0) {
+                        break;
+                    }
+                }
+            }
+
+            while (requiredAmount > 0) {
+                int emptySlot = inventory.firstEmpty();
+                if (emptySlot == -1) {
+                    return false;
+                }
+                requiredAmount -= material.getMaxStackSize();
             }
         }
-        return true;
+
+        return requiredCounts.values().stream().allMatch(count -> count <= 0);
+    }
+
+    public static boolean hasEnoughInventorySpace(Player player, ItemStack[] itemsToStore) {
+        Inventory inventory = player.getInventory();
+        Map<Material, Integer> requiredCounts = new HashMap<>();
+
+        for (ItemStack item : itemsToStore) {
+            requiredCounts.put(item.getType(), requiredCounts.getOrDefault(item.getType(), 0) + item.getAmount());
+        }
+
+        for (Map.Entry<Material, Integer> entry : requiredCounts.entrySet()) {
+            Material material = entry.getKey();
+            int requiredAmount = entry.getValue();
+
+            for (ItemStack inventoryItem : inventory.getContents()) {
+                if (inventoryItem != null && inventoryItem.getType() == material) {
+                    int availableSpace = inventoryItem.getMaxStackSize() - inventoryItem.getAmount();
+                    requiredAmount -= availableSpace;
+                    if (requiredAmount <= 0) {
+                        break;
+                    }
+                }
+            }
+
+            while (requiredAmount > 0) {
+                int emptySlot = inventory.firstEmpty();
+                if (emptySlot == -1) {
+                    return false;
+                }
+                requiredAmount -= material.getMaxStackSize();
+            }
+        }
+
+        return requiredCounts.values().stream().allMatch(count -> count <= 0);
+    }
+
+
+    public static int getEmptySlotsInInventory(Inventory inventory) {
+        int emptySlots = 0;
+        for (ItemStack item : inventory.getContents()) {
+            if (item == null || item.getType() == Material.AIR) {
+                emptySlots++;
+            }
+        }
+        return emptySlots;
     }
 
     public static boolean hasEnoughStorageInChests(List<Location> chestLocations, ItemStack[] itemsToStore) {
         for (Location chestLocation : chestLocations) {
             Block block = chestLocation.getBlock();
-            if (block.getState() instanceof org.bukkit.block.Chest chest) {
-                Inventory inventory = chest.getInventory();
-                for (ItemStack item : itemsToStore) {
-                    if (inventory.firstEmpty() == -1 && !inventory.containsAtLeast(item, item.getAmount())) {
-                        return false;
-                    }
-                }
+            InventoryHolder chest = null;
+
+            if (block.getState() instanceof org.bukkit.block.Chest) {
+                chest = (org.bukkit.block.Chest) block.getState();
+            } else if (block.getState() instanceof ShulkerBox) {
+                chest = (ShulkerBox) block.getState();
+            } else if (block.getState() instanceof Barrel) {
+                chest = (Barrel) block.getState();
             }
-            if (block.getState() instanceof ShulkerBox shulkerBox) {
-                Inventory inventory = shulkerBox.getInventory();
-                for (ItemStack item : itemsToStore) {
-                    if (inventory.firstEmpty() == -1 && !inventory.containsAtLeast(item, item.getAmount())) {
-                        return false;
-                    }
-                }
-            }
-            if (block.getState() instanceof Barrel barrel) {
-                Inventory inventory = barrel.getInventory();
-                for (ItemStack item : itemsToStore) {
-                    if (inventory.firstEmpty() == -1 && !inventory.containsAtLeast(item, item.getAmount())) {
-                        return false;
-                    }
-                }
+
+            if (chest != null && hasEnoughStorageInChest(chest, itemsToStore)) {
+                return true;
             }
         }
-        return true;
+        return false;
+    }
+
+
+    @Getter
+    public static class ShopEventCount {
+        private int count;
+        private final String type;
+        private final UUID target;
+
+        public ShopEventCount(int count, String type, UUID target) {
+            this.count = count;
+            this.type = type;
+            this.target = target;
+        }
+
+        public void decrementCount() {
+            count--;
+        }
     }
 }
