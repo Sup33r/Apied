@@ -5,8 +5,18 @@ messages:
     count:
       plural: "stycken"
       singular: "styck"
-  permissionDenied: "<redÅtkomst nekad.</red>"
+  permissionDenied: "<red>Åtkomst nekad.</red>"
   shop:
+    operationsleft: "<gray>Affärsoperationer kvar: <dark_gray>%count%</dark_gray></gray>"
+    modify:
+      maxPlayerDailyUses: "<green>Maxantalet spelarspecifika transaktioner per dag hos affären har ändrats till %count%.</green>"
+      maxDailyUses: "<green>Maxantalet transaktioner per dag hos affären har ändrats till %count%.</green>"
+      maxPlayerUses: "<green>Maxantalet spelarspecifika transaktioner hos affären har ändrats till %count%.</green>"
+      maxUses: "<green>Maxantalet transaktioner hos affären har ändrats till %count%.</green>"
+    recap:
+      header: "<dark_aqua>--- <aqua>Affärshändelser senaste 15 minuterna</aqua> ---</dark_aqua>"
+      sold: "<aqua>Dina affärer har sålt för +%amount% encoins.</aqua>"
+      bought: "<aqua>Dina affärer har köpt för -%amount% encoins.</aqua>"
     confirm:
       sell:
         single: "<yellow>Klicka en gång till om du vill sälja %item% för %price% encoins.</yellow>"
@@ -23,6 +33,12 @@ messages:
         buy: "<dark_red><underlined>KÖP</underlined></dark_red>"
         sell: "<dark_red><underlined>SÄLJ</underlined></dark_red>"
     success:
+      sell:
+        single: "<green>Du har sålt %item% för %price% encoins.</green>"
+        multiple: "<green>Du har sålt...\n%items%</green>"
+      buy:
+        single: "<green>Du har köpt %item% för %price% encoins.</green>"
+        multiple: "<green>Du har köpt...\n%items%</green>"
       addChest: "<green>Kistan har lagts till som lager i affären.</green>"
       create:
         sell: "<green>Du har skapat en affär där kunderna kan kan sälja...\n%items%"

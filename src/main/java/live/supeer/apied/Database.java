@@ -136,6 +136,7 @@ public class Database {
                                 `shopId` int(11) NOT NULL,
                                 `uuid` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
                                 `dateTime` bigint(30) DEFAULT NULL,
+                                `balance` bigint(30) DEFAULT NULL,
                                 PRIMARY KEY (`id`)
                               ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;""");
         } catch (SQLException e) {

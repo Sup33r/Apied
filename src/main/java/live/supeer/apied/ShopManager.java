@@ -6,6 +6,7 @@ import de.tr7zw.changeme.nbtapi.NBT;
 import de.tr7zw.changeme.nbtapi.iface.ReadableNBT;
 import lombok.Getter;
 import net.kyori.adventure.text.TextComponent;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.*;
@@ -15,6 +16,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.scheduler.BukkitTask;
 
 import java.util.*;
 
@@ -22,6 +24,9 @@ public class ShopManager {
     public static final HashMap<UUID, Integer> shopConfirmation = new HashMap<>();
     private static final Map<UUID, ShopEventCount> shopEventCountMap = new HashMap<>();
     public static final HashMap<UUID, Location> shopCreation = new HashMap<>();
+
+    private static final Map<UUID, List<TransactionInfo>> pendingRecaps = new HashMap<>();
+    private static final Map<UUID, BukkitTask> scheduledRecapTasks = new HashMap<>();
 
     public static void newShop(Sign sign, Player player, Chest chest, int balance, String type) {
         Location signLocation = sign.getLocation();
@@ -73,6 +78,15 @@ public class ShopManager {
         try {
             DbRow row = DB.getFirstRow("SELECT * FROM md_shops WHERE signLocation = ?", Utils.locationToString(sign.getLocation()));
             return row != null ? new ChestShop(row) : null;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static void logTransaction(UUID playerUUID, int shopId, int price) {
+        try {
+            DB.executeInsert("INSERT INTO md_shoptransactions (shopId, uuid, dateTime, balance) VALUES (?, ?, ?, ?)",
+                    shopId, playerUUID.toString(), Utils.getTimestamp(), price);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -271,21 +285,161 @@ public class ShopManager {
                 sellItems(player, chestShop);
             }
         } else if (shopEventCount.getType().equals("maxUses")) {
-
+            if (!chestShop.getOwnerUUID().equals(player.getUniqueId()) && !ChestManager.chestOverride.contains(player)) {
+                Apied.sendMessage(player, "messages.permissionDenied");
+                return;
+            }
+            chestShop.setMaxUses(shopEventCount.uses);
+            decrementChestEventCount(player.getUniqueId());
+            Apied.sendMessage(player, "messages.shop.modify.maxUses", "%count%", String.valueOf(shopEventCount.uses));
+            if (shopEventCount.count > 0) {
+                Apied.sendMessage(player, "messages.shop.operationsleft", "%count%", String.valueOf(shopEventCount.count));
+            }
         } else if (shopEventCount.getType().equals("maxPlayerUses")) {
-
+            if (!chestShop.getOwnerUUID().equals(player.getUniqueId()) && !ChestManager.chestOverride.contains(player)) {
+                Apied.sendMessage(player, "messages.permissionDenied");
+                return;
+            }
+            chestShop.setMaxPlayerUses(shopEventCount.uses);
+            decrementChestEventCount(player.getUniqueId());
+            Apied.sendMessage(player, "messages.shop.modify.maxPlayerUses", "%count%", String.valueOf(shopEventCount.uses));
+            if (shopEventCount.count > 0) {
+                Apied.sendMessage(player, "messages.shop.operationsleft", "%count%", String.valueOf(shopEventCount.count));
+            }
         } else if (shopEventCount.getType().equals("maxDailyUses")) {
-
+            if (!chestShop.getOwnerUUID().equals(player.getUniqueId()) && !ChestManager.chestOverride.contains(player)) {
+                Apied.sendMessage(player, "messages.permissionDenied");
+                return;
+            }
+            chestShop.setMaxDailyUses(shopEventCount.uses);
+            decrementChestEventCount(player.getUniqueId());
+            Apied.sendMessage(player, "messages.shop.modify.maxDailyUses", "%count%", String.valueOf(shopEventCount.uses));
+            if (shopEventCount.count > 0) {
+                Apied.sendMessage(player, "messages.shop.operationsleft", "%count%", String.valueOf(shopEventCount.count));
+            }
+        } else if (shopEventCount.getType().equals("maxPlayerDailyUses")) {
+            if (!chestShop.getOwnerUUID().equals(player.getUniqueId()) && !ChestManager.chestOverride.contains(player)) {
+                Apied.sendMessage(player, "messages.permissionDenied");
+                return;
+            }
+            chestShop.setMaxPlayerDailyUses(shopEventCount.uses);
+            decrementChestEventCount(player.getUniqueId());
+            Apied.sendMessage(player, "messages.shop.modify.maxPlayerDailyUses", "%count%", String.valueOf(shopEventCount.uses));
+            if (shopEventCount.count > 0) {
+                Apied.sendMessage(player, "messages.shop.operationsleft", "%count%", String.valueOf(shopEventCount.count));
+            }
         }
-
     }
 
     public static void buyItems(Player player, ChestShop chestShop) {
+        // Remove items from chests and add to player inventory
+        for (ItemStack item : chestShop.getItems()) {
+            removeItemFromChests(chestShop.getChestLocations(), item);
+            player.getInventory().addItem(item);
+        }
 
+        // Handle balance
+        MPlayer buyer = MPlayerManager.getPlayerFromPlayer(player);
+        MPlayer seller = MPlayerManager.getPlayerFromUUID(chestShop.getOwnerUUID());
+
+        if (buyer != null && seller != null) {
+            buyer.removeBalance(chestShop.getPrice(), "{ \"type\": \"shop\", \"subtype\": \"buySelf\", \"playerUUID\": \"" + seller.getUuid() + "\", \"shopId\": " + chestShop.getId() + "}");
+            seller.addBalance(chestShop.getPrice(), "{ \"type\": \"shop\", \"subtype\": \"buyOther\", \"playerUUID\": \"" + buyer.getUuid() + "\", \"shopId\": " + chestShop.getId() + "}");
+        }
+
+        // Update sign
+        Sign sign = (Sign) chestShop.getSignLocation().getBlock().getState();
+        formatSign(sign, chestShop);
+
+        // Log transaction
+        logTransaction(player.getUniqueId(), chestShop.getId(), chestShop.getPrice());
+
+        // Send messages
+        if (chestShop.getItems().length == 1) {
+            Apied.sendMessage(player,"messages.shop.success.buy.single", "%item%", itemFormatting(chestShop.getItems()[0]), "%price%", Utils.formattedMoney(chestShop.getPrice()));
+        } else {
+            Apied.sendMessage(player,"messages.shop.success.buy.multiple", "%items%", itemsFormatting(chestShop.getItems(), chestShop.getPrice()));
+        }
+        scheduleRecap(chestShop.getOwnerUUID(), new TransactionInfo(player.getUniqueId(), "BUY", chestShop.getPrice(), chestShop.getId()));
     }
 
     public static void sellItems(Player player, ChestShop chestShop) {
+        // Remove items from player inventory and add to chests
+        for (ItemStack item : chestShop.getItems()) {
+            player.getInventory().removeItem(item);
+            addItemToChests(chestShop.getChestLocations(), item);
+        }
 
+        // Handle balance
+        MPlayer seller = MPlayerManager.getPlayerFromPlayer(player);
+        MPlayer buyer = MPlayerManager.getPlayerFromUUID(chestShop.getOwnerUUID());
+
+        if (seller != null && buyer != null) {
+            seller.addBalance(chestShop.getPrice(), "{ \"type\": \"shop\", \"subtype\": \"sellSelf\", \"playerUUID\": \"" + buyer.getUuid() + "\", \"shopId\": " + chestShop.getId() + "}");
+            buyer.removeBalance(chestShop.getPrice(), "{ \"type\": \"shop\", \"subtype\": \"sellOther\", \"playerUUID\": \"" + seller.getUuid() + "\", \"shopId\": " + chestShop.getId() + "}");
+        }
+
+        // Update sign
+        Sign sign = (Sign) chestShop.getSignLocation().getBlock().getState();
+        formatSign(sign, chestShop);
+
+        // Log transaction
+        logTransaction(player.getUniqueId(), chestShop.getId(), chestShop.getPrice());
+
+        // Send messages
+        if (chestShop.getItems().length == 1) {
+            Apied.sendMessage(player,"messages.shop.success.sell.single", "%item%", itemFormatting(chestShop.getItems()[0]), "%price%", Utils.formattedMoney(chestShop.getPrice()));
+        } else {
+            Apied.sendMessage(player,"messages.shop.success.sell.multiple", "%items%", itemsFormatting(chestShop.getItems(), chestShop.getPrice()));
+        }
+        scheduleRecap(chestShop.getOwnerUUID(), new TransactionInfo(player.getUniqueId(), "SELL", chestShop.getPrice(), chestShop.getId()));
+    }
+
+    private static void scheduleRecap(UUID ownerUUID, TransactionInfo transactionInfo) {
+        pendingRecaps.computeIfAbsent(ownerUUID, k -> new ArrayList<>()).add(transactionInfo);
+
+        if (!scheduledRecapTasks.containsKey(ownerUUID)) {
+            BukkitTask task = Bukkit.getScheduler().runTaskLater(Apied.getInstance(), () -> {
+                sendRecap(ownerUUID);
+                scheduledRecapTasks.remove(ownerUUID);
+            }, 20 * 60 * 15); // 15 minutes in ticks
+
+            scheduledRecapTasks.put(ownerUUID, task);
+        }
+    }
+
+    private static void sendRecap(UUID ownerUUID) {
+        List<TransactionInfo> transactions = pendingRecaps.remove(ownerUUID);
+        if (transactions == null || transactions.isEmpty()) {
+            return;
+        }
+
+        Player owner = Bukkit.getPlayer(ownerUUID);
+        if (owner == null || !owner.isOnline()) {
+            return;
+        }
+        boolean hasBuy = false;
+        int totalBuy = 0;
+
+        boolean hasSell = false;
+        int totalSell = 0;
+
+        for (TransactionInfo transaction : transactions) {
+            if (transaction.type.equals("BUY")) {
+                hasBuy = true;
+                totalBuy += transaction.price;
+            } else if (transaction.type.equals("SELL")) {
+                hasSell = true;
+                totalSell += transaction.price;
+            }
+        }
+        Apied.sendMessage(owner, "messages.shop.recap.header");
+        if (hasBuy) {
+            Apied.sendMessage(owner, "messages.shop.recap.buy", "%amount%", Utils.formattedMoney(totalBuy));
+        }
+        if (hasSell) {
+            Apied.sendMessage(owner, "messages.shop.recap.sell", "%amount%", Utils.formattedMoney(totalSell));
+        }
     }
 
     public static void sendConfirmationMessage(Player player, ChestShop chestShop) {
@@ -396,7 +550,6 @@ public class ShopManager {
 
     private static String getHoverInfo(ItemStack item) {
         String itemId = item.getType().getKey().toString().toLowerCase();
-        int count = item.getAmount();
         if (Apied.configuration.getBannedPreviewItems().contains(itemId)) {
             return "<hover:show_item:'" + itemId + "':" + 1 + ">";
         }
@@ -444,8 +597,9 @@ public class ShopManager {
         SignSide frontSide = sign.getSide(Side.FRONT);
         TextComponent comp1 = null;
         TextComponent comp2 = null;
+        String type;
         if (chestShop == null) {
-            String type = getType(sign);
+            type = getType(sign);
             if (type == null) {
                 return;
             }
@@ -458,21 +612,8 @@ public class ShopManager {
                 comp1 = (TextComponent) Apied.getMessageComponent("messages.shop.sign.stocked.sell");
                 comp2 = (TextComponent) Apied.getMessageComponent("messages.shop.sign.price", "%price%", Utils.formattedMoney(getBalance(sign)));
             }
-            if (isValidSide(backSide) && isEmptySide(frontSide)) {
-                assert comp1 != null;
-                backSide.line(0, comp1);
-                assert comp2 != null;
-                backSide.line(3, comp2);
-            } else if (isValidSide(frontSide) && isEmptySide(backSide)) {
-                assert comp1 != null;
-                frontSide.line(0, comp1);
-                assert comp2 != null;
-                frontSide.line(3, comp2);
-            }
-            sign.setWaxed(true);
-            sign.update();
         } else {
-            String type = chestShop.getType();
+            type = chestShop.getType();
             if (type == null) {
                 return;
             }
@@ -493,20 +634,20 @@ public class ShopManager {
                     comp2 = (TextComponent) Apied.getMessageComponent("messages.shop.sign.price", "%price%", Utils.formattedMoney(getBalance(sign)));
                 }
             }
-            if (isValidSide(backSide) && isEmptySide(frontSide)) {
-                assert comp1 != null;
-                backSide.line(0, comp1);
-                assert comp2 != null;
-                backSide.line(3, comp2);
-            } else if (isValidSide(frontSide) && isEmptySide(backSide)) {
-                assert comp1 != null;
-                frontSide.line(0, comp1);
-                assert comp2 != null;
-                frontSide.line(3, comp2);
-            }
-            sign.setWaxed(true);
-            sign.update();
         }
+        if (isValidSide(backSide) && isEmptySide(frontSide)) {
+            assert comp1 != null;
+            backSide.line(0, comp1);
+            assert comp2 != null;
+            backSide.line(3, comp2);
+        } else if (isValidSide(frontSide) && isEmptySide(backSide)) {
+            assert comp1 != null;
+            frontSide.line(0, comp1);
+            assert comp2 != null;
+            frontSide.line(3, comp2);
+        }
+        sign.setWaxed(true);
+        sign.update();
     }
 
     public static boolean validChest(Location location, Player player) {
@@ -599,6 +740,41 @@ public class ShopManager {
             return Utils.itemStackArrayToBase64(inventory.getContents());
         }
         return null;
+    }
+
+    private static void removeItemFromChests(List<Location> chestLocations, ItemStack itemToRemove) {
+        int amountToRemove = itemToRemove.getAmount();
+        for (Location location : chestLocations) {
+            Block block = location.getBlock();
+            if (block.getState() instanceof InventoryHolder) {
+                Inventory inventory = ((InventoryHolder) block.getState()).getInventory();
+                for (ItemStack item : inventory.getContents()) {
+                    if (item != null && item.isSimilar(itemToRemove)) {
+                        int amount = Math.min(amountToRemove, item.getAmount());
+                        item.setAmount(item.getAmount() - amount);
+                        amountToRemove -= amount;
+                        if (amountToRemove <= 0) {
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static void addItemToChests(List<Location> chestLocations, ItemStack itemToAdd) {
+        for (Location location : chestLocations) {
+            Block block = location.getBlock();
+            if (block.getState() instanceof InventoryHolder) {
+                Inventory inventory = ((InventoryHolder) block.getState()).getInventory();
+                HashMap<Integer, ItemStack> leftover = inventory.addItem(itemToAdd);
+                if (leftover.isEmpty()) {
+                    return;
+                } else {
+                    itemToAdd = leftover.get(0);
+                }
+            }
+        }
     }
 
     public static boolean hasRequiredItems(Player player, ItemStack[] requiredItems) {
@@ -745,21 +921,63 @@ public class ShopManager {
         return false;
     }
 
+    public static void startShopEventCount(Player player, String type, int uses, int count) {
+        shopEventCountMap.put(player.getUniqueId(), new ShopEventCount(count, type, player.getUniqueId(), uses));
+    }
+
+    public static boolean isShopEventCounting(UUID playerUUID) {
+        return shopEventCountMap.containsKey(playerUUID);
+    }
+
+    public static ShopEventCount getShopEventCount(UUID playerUUID) {
+        return shopEventCountMap.get(playerUUID);
+    }
+
+    public static void stopShopEventCount(UUID playerUUID) {
+        shopEventCountMap.remove(playerUUID);
+    }
+
+    public static void decrementChestEventCount(UUID playerUUID) {
+        ShopEventCount shopEventCount = shopEventCountMap.get(playerUUID);
+        if (shopEventCount != null) {
+            shopEventCount.decrementCount();
+            if (shopEventCount.count <= 0) {
+                shopEventCountMap.remove(playerUUID);
+            }
+        }
+    }
+
 
     @Getter
     public static class ShopEventCount {
         private int count;
         private final String type;
         private final UUID target;
+        private final int uses;
 
-        public ShopEventCount(int count, String type, UUID target) {
+        public ShopEventCount(int count, String type, UUID target, int uses) {
             this.count = count;
             this.type = type;
             this.target = target;
+            this.uses = uses;
         }
 
         public void decrementCount() {
             count--;
+        }
+    }
+
+    public static class TransactionInfo {
+        UUID playerUUID;
+        String type;
+        int price;
+        int shopId;
+
+        TransactionInfo(UUID playerUUID, String type, int price, int shopId) {
+            this.playerUUID = playerUUID;
+            this.type = type;
+            this.price = price;
+            this.shopId = shopId;
         }
     }
 }

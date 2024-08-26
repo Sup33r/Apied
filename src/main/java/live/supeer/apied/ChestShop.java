@@ -73,4 +73,40 @@ public class ChestShop {
         }
     }
 
+    public void setMaxUses(int maxUses) {
+        this.maxUses = maxUses;
+        try {
+            DB.executeUpdate("UPDATE `md_shops` SET `maxUses` = ? WHERE `id` = ?", maxUses, this.id);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void setMaxPlayerUses(int maxPlayerUses) {
+        this.maxPlayerUses = maxPlayerUses;
+        try {
+            DB.executeUpdate("UPDATE `md_shops` SET `maxPlayerUses` = ? WHERE `id` = ?", maxPlayerUses, this.id);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void setMaxPlayerDailyUses(int maxPlayerDailyUses) {
+        this.maxPlayerDailyUses = maxPlayerDailyUses;
+        try {
+            DB.executeUpdate("UPDATE `md_shops` SET `maxPlayerDailyUses` = ? WHERE `id` = ?", maxPlayerDailyUses, this.id);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void setMaxDailyUses(int maxDailyUses) {
+        this.maxDailyUses = maxDailyUses;
+        try {
+            DB.executeUpdate("UPDATE `md_shops` SET `maxDailyUses` = ? WHERE `id` = ?", maxDailyUses, this.id);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
 }
