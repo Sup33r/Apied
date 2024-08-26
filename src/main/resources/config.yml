@@ -10,6 +10,8 @@ settings:
 
   shop:
     maxitems: 9
+    maxchests: 5
+    maxdistance: 48
 
     bannedpreviewitems:
       - "minecraft:written_book"

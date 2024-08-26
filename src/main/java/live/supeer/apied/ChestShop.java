@@ -1,11 +1,13 @@
 package live.supeer.apied;
 
+import co.aikar.idb.DB;
 import co.aikar.idb.DbRow;
 import lombok.Getter;
 import org.bukkit.Location;
 import org.bukkit.inventory.ItemStack;
 
 import java.io.IOException;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.UUID;
 
@@ -37,6 +39,24 @@ public class ChestShop {
         this.items = Utils.itemStackArrayFromBase64(data.getString("items"));
         this.dateTime = data.getLong("dateTime");
         this.removed = data.get("removed");
+    }
+
+    public void addChestLocation(Location location) {
+        chestLocations.add(location);
+        try {
+            DB.executeUpdate("UPDATE `md_shops` SET `chestLocations` = ? WHERE `id` = ?", Utils.locationListToString(chestLocations), this.id);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void removeChestLocation(Location location) {
+        chestLocations.remove(location);
+        try {
+            DB.executeUpdate("UPDATE `md_shops` SET `chestLocations` = ? WHERE `id` = ?", Utils.locationListToString(chestLocations), this.id);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
     }
 
 }

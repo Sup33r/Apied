@@ -113,6 +113,26 @@ public class Utils {
         return locationString.toString();
     }
 
+    public static List<Integer> stringToIntegerList(String integerString) {
+        List<Integer> integers = new ArrayList<>();
+        if (integerString == null || integerString.isEmpty()) {
+            return integers;
+        }
+        String[] integerArray = integerString.split(",");
+        for (String integer : integerArray) {
+            integers.add(Integer.parseInt(integer));
+        }
+        return integers;
+    }
+
+    public static String integerListToString(List<Integer> integers) {
+        StringBuilder integerString = new StringBuilder();
+        for (Integer integer : integers) {
+            integerString.append(integer).append(",");
+        }
+        return integerString.toString();
+    }
+
     public static long getTimestamp() {
         return System.currentTimeMillis() / 1000L;
     }

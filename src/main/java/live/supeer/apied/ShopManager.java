@@ -62,25 +62,95 @@ public class ShopManager {
             Apied.sendMessage(player, "messages.chest.error.modify.notOwner");
             return;
         }
-        if (!validChest(chestLocation, player)) {
-            return;
-        }
         Sign sign = signLocation.getBlock().getState() instanceof Sign ? (Sign) signLocation.getBlock().getState() : null;
         if (sign == null) {
             Apied.sendMessage(player, "messages.shop.error.signNotFound");
             return;
         }
-        if (!validSign(sign)) {
-            Apied.sendMessage(player, "messages.shop.error.invalidSign");
+        if (chestLocation.distance(signLocation) > Apied.configuration.getShopMaxDistance()) {
+            Apied.sendMessage(player, "messages.shop.error.tooFarAway", "%max%", String.valueOf(Apied.configuration.getShopMaxDistance()), "%distance%", String.valueOf((int) chestLocation.distance(signLocation)));
             return;
         }
-        newShop(sign, player, chest, getBalance(sign), getType(sign));
-        int balance = getBalance(sign);
-        formatSign(sign,null);
-        if (Objects.equals(getType(sign), "BUY")) {
-            Apied.sendMessage(player, "messages.shop.success.create.buy", "%items%", itemsFormatting(chestLocation, balance));
+        ChestShop chestShop = getShopFromSign(sign);
+        if  (chestShop == null) {
+            if (!validChest(chestLocation, player)) {
+                return;
+            }
+            newShop(sign, player, chest, getBalance(sign), getType(sign));
+            chest.addShop(Objects.requireNonNull(getShopFromSign(sign)).getId());
+            shopCreation.remove(player.getUniqueId());
+            int balance = getBalance(sign);
+            formatSign(sign, null);
+            if (Objects.equals(getType(sign), "BUY")) {
+                Apied.sendMessage(player, "messages.shop.success.create.buy", "%items%", itemsFormatting(chestLocation, balance));
+            } else {
+                Apied.sendMessage(player, "messages.shop.success.create.sell", "%items%", itemsFormatting(chestLocation, balance));
+            }
         } else {
-            Apied.sendMessage(player, "messages.shop.success.create.sell", "%items%", itemsFormatting(chestLocation, balance));
+            if (chestShop.getChestLocations().size() >= Apied.configuration.getShopMaxChests()) {
+                Apied.sendMessage(player, "messages.shop.error.tooManyChests", "%max%", String.valueOf(Apied.configuration.getShopMaxChests()));
+                return;
+            }
+            if (chestShop.getChestLocations().contains(chestLocation)) {
+                Apied.sendMessage(player, "messages.shop.error.alreadyAdded");
+                return;
+            }
+            chestShop.addChestLocation(chestLocation);
+            formatSign(sign, chestShop);
+            Apied.sendMessage(player, "messages.shop.success.addChest");
+        }
+    }
+
+    public static void handleChestLocationChange(Location oldLocation, Location newLocation) {
+        try {
+            List<DbRow> rows = DB.getResults("SELECT * FROM md_shops WHERE chestLocations LIKE ?", "%" + Utils.locationToString(oldLocation) + "%");
+            if (rows == null || rows.isEmpty()) {
+                return;
+            }
+            for (DbRow row : rows) {
+                ChestShop chestShop = new ChestShop(row);
+                chestShop.removeChestLocation(oldLocation);
+                chestShop.addChestLocation(newLocation);
+                Sign sign = (Sign) chestShop.getSignLocation().getBlock().getState();
+                formatSign(sign, chestShop);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static void handleChestRemoval(Location chestLocation) {
+        try {
+            List<DbRow> rows = DB.getResults("SELECT * FROM md_shops WHERE chestLocations LIKE ?", "%" + Utils.locationToString(chestLocation) + "%");
+            if (rows == null || rows.isEmpty()) {
+                return;
+            }
+            for (DbRow row : rows) {
+                ChestShop chestShop = new ChestShop(row);
+                chestShop.removeChestLocation(chestLocation);
+                Sign sign = (Sign) chestShop.getSignLocation().getBlock().getState();
+                formatSign(sign, chestShop);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static void handleSignRemoval(Location signLocation) {
+        try {
+            DbRow row = DB.getFirstRow("SELECT * FROM md_shops WHERE signLocation = ?", Utils.locationToString(signLocation));
+            if (row != null) {
+                ChestShop chestShop = new ChestShop(row);
+                for (Location chestLocation : chestShop.getChestLocations()) {
+                    Chest chest = ChestManager.getClaimedChest(chestLocation);
+                    if (chest != null) {
+                        chest.removeShop(chestShop.getId());
+                    }
+                }
+                DB.executeUpdate("UPDATE md_shops SET removed = ? WHERE id = ?", true, chestShop.getId());
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -127,11 +197,11 @@ public class ShopManager {
             String plural = item.getAmount() == 1 ? Apied.getMessage("messages.word.count.singular") : Apied.getMessage("messages.word.count.plural");
 
             formattedItems.append("   ")
-                    .append(hoverInfo)
                     .append(item.getAmount())
                     .append(" ")
                     .append(plural)
                     .append(" ")
+                    .append(hoverInfo)
                     .append(translatable)
                     .append("</hover>\n");
         }
@@ -156,11 +226,11 @@ public class ShopManager {
         String itemId = item.getType().getKey().toString().toLowerCase();
         int count = item.getAmount();
         if (Apied.configuration.getBannedPreviewItems().contains(itemId)) {
-            return "<hover:show_item:'" + itemId + "':" + count + ">";
+            return "<hover:show_item:'" + itemId + "':" + 1 + ">";
         }
         ReadableNBT nbt = NBT.itemStackToNBT(item);
         String nbtString = nbt.toString();
-        return "<hover:show_item:'" + itemId + "':" + count + ":'" + nbtString + "'>";
+        return "<hover:show_item:'" + itemId + "':" + 1 + ":'" + nbtString + "'>";
     }
 
     public static int getBalance(Sign sign) {

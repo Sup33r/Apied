@@ -17,7 +17,7 @@ public class Chest {
     private ChestType type;
     private long dateTime;
     private List<UUID> sharedPlayers;
-    //HÄR SKA DET VARA EN OCKSÅ MED SHOPS; private List<Shop> shops;
+    private List<Integer> linkedShopIds;
 
 
 
@@ -28,6 +28,7 @@ public class Chest {
         this.type = ChestType.getByName(data.getString("type"));
         this.dateTime = data.getLong("dateTime");
         this.sharedPlayers = Utils.stringToUUIDList(data.getString("sharedPlayers"));
+        this.linkedShopIds = Utils.stringToIntegerList(data.getString("shops"));
     }
 
     public void setLocation(Location location) {
@@ -43,6 +44,23 @@ public class Chest {
         this.type = type;
         try {
             DB.executeUpdate("UPDATE `md_chests` SET `type` = ? WHERE `id` = ?", type.getType(), this.id);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+    public void addShop(int shopId) {
+        linkedShopIds.add(shopId);
+        try {
+            DB.executeUpdate("UPDATE `md_chests` SET `shops` = ? WHERE `id` = ?", Utils.integerListToString(linkedShopIds), this.id);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void removeShop(int shopId) {
+        linkedShopIds.remove(shopId);
+        try {
+            DB.executeUpdate("UPDATE `md_chests` SET `shops` = ? WHERE `id` = ?", Utils.integerListToString(linkedShopIds), this.id);
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
