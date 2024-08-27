@@ -28,15 +28,15 @@ public class ShopManager {
     private static final Map<UUID, List<TransactionInfo>> pendingRecaps = new HashMap<>();
     private static final Map<UUID, BukkitTask> scheduledRecapTasks = new HashMap<>();
 
-    public static void newShop(Sign sign, Player player, Chest chest, int balance, String type) {
+    public static void newShop(Sign sign, Player player, Chest chest, int price, String type, Side side) {
         Location signLocation = sign.getLocation();
         List<Location> chestLocationList = new ArrayList<>();
         chestLocationList.add(chest.getLocation());
         String chestLocations = Utils.locationListToString(chestLocationList);
         String serializedItems = serializeItems(chest.getLocation());
         try {
-            DB.executeInsert("INSERT INTO md_shops (ownerUUID, signLocation, chestLocations, dateTime, balance, items, type) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    player.getUniqueId().toString(), Utils.locationToString(signLocation), chestLocations, Utils.getTimestamp(), balance, serializedItems, type);
+            DB.executeInsert("INSERT INTO md_shops (ownerUUID, signLocation, chestLocations, dateTime, price, items, type, signSide) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    player.getUniqueId().toString(), Utils.locationToString(signLocation), chestLocations, Utils.getTimestamp(), price, serializedItems, type, side.toString());
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -85,7 +85,7 @@ public class ShopManager {
 
     private static void logTransaction(UUID playerUUID, int shopId, int price) {
         try {
-            DB.executeInsert("INSERT INTO md_shoptransactions (shopId, uuid, dateTime, balance) VALUES (?, ?, ?, ?)",
+            DB.executeInsert("INSERT INTO md_shoptransactions (shopId, uuid, dateTime, price) VALUES (?, ?, ?, ?)",
                     shopId, playerUUID.toString(), Utils.getTimestamp(), price);
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -123,7 +123,7 @@ public class ShopManager {
             if (!validChest(chestLocation, player)) {
                 return;
             }
-            newShop(sign, player, chest, getBalance(sign), getType(sign));
+            newShop(sign, player, chest, getBalance(sign), getType(sign), getSide(sign));
             chest.addShop(Objects.requireNonNull(getShopFromSign(sign)).getId());
             shopCreation.remove(player.getUniqueId());
             int balance = getBalance(sign);
@@ -185,7 +185,11 @@ public class ShopManager {
 
     public static void handleSignRemoval(Location signLocation) {
         try {
-            DbRow row = DB.getFirstRow("SELECT * FROM md_shops WHERE signLocation = ?", Utils.locationToString(signLocation));
+            String signLocationString = Utils.locationToString(signLocation);
+            // Log the sign location string for debugging
+            System.out.println("Sign Location String: " + signLocationString);
+
+            DbRow row = DB.getFirstRow("SELECT * FROM md_shops WHERE signLocation = ?", signLocationString);
             if (row != null) {
                 ChestShop chestShop = new ChestShop(row);
                 for (Location chestLocation : chestShop.getChestLocations()) {
@@ -197,6 +201,8 @@ public class ShopManager {
                 chestShop.setRemoved(true);
             }
         } catch (Exception e) {
+            // Log the exception for debugging
+            e.printStackTrace();
             throw new RuntimeException(e);
         }
     }
@@ -206,127 +212,141 @@ public class ShopManager {
         if (chestShop == null || chestShop.isRemoved() || !(chestShop.getSignSide() == clickedSide)) {
             return;
         }
+        if (!shopConfirmation.containsKey(player.getUniqueId()) || !shopConfirmation.get(player.getUniqueId()).equals(chestShop.getId())) {
+            shopConfirmation.put(player.getUniqueId(), chestShop.getId());
+            sendConfirmationMessage(player, chestShop);
+            return;
+        }
+        if (chestShop.getMaxUses() != 0) {
+            if (totalShopUses(chestShop.getId()) >= chestShop.getMaxUses()) {
+                Apied.sendMessage(player, "messages.shop.error.maxUses");
+                formatSign(sign, chestShop);
+                return;
+            }
+        }
+        if (chestShop.getMaxDailyUses() != 0) {
+            if (totalDailyShopUses(chestShop.getId()) >= chestShop.getMaxDailyUses()) {
+                Apied.sendMessage(player, "messages.shop.error.maxDailyUses");
+                formatSign(sign, chestShop);
+                return;
+            }
+        }
+        if (chestShop.getMaxPlayerUses() != 0) {
+            if (playerShopUses(player.getUniqueId(), chestShop.getId()) >= chestShop.getMaxPlayerUses()) {
+                Apied.sendMessage(player, "messages.shop.error.maxPlayerUses");
+                formatSign(sign, chestShop);
+                return;
+            }
+        }
+        if (chestShop.getMaxPlayerDailyUses() != 0) {
+            if (playerDailyShopUses(player.getUniqueId(), chestShop.getId()) >= chestShop.getMaxPlayerDailyUses()) {
+                Apied.sendMessage(player, "messages.shop.error.maxDailyPlayerUses");
+                formatSign(sign, chestShop);
+                return;
+            }
+        }
+        if (chestShop.getType().equals("BUY")) {
+            if (!hasRequiredItemsInChests(chestShop.getChestLocations(), chestShop.getItems())) {
+                Apied.sendMessage(player, "messages.shop.error.missingItems");
+                formatSign(sign, chestShop);
+                return;
+            }
+            if (!hasEnoughInventorySpace(player, chestShop.getItems())) {
+                Apied.sendMessage(player, "messages.shop.error.fullInventory");
+                formatSign(sign, chestShop);
+                return;
+            }
+            MPlayer mPlayer = MPlayerManager.getPlayerFromPlayer(player);
+            if (mPlayer == null) {
+                return;
+            }
+            if (chestShop.getPrice() > mPlayer.getBalance()) {
+                Apied.sendMessage(player, "messages.shop.error.insufficientFunds");
+                formatSign(sign, chestShop);
+                return;
+            }
+            buyItems(player, chestShop);
+        } else if (chestShop.getType().equals("SELL")) {
+            if (!hasEnoughStorageInChests(chestShop.getChestLocations(), chestShop.getItems())) {
+                Apied.sendMessage(player, "messages.shop.error.noSpace");
+                formatSign(sign, chestShop);
+                return;
+            }
+            if (!hasRequiredItems(player, chestShop.getItems())) {
+                Apied.sendMessage(player, "messages.shop.error.missingInventory");
+                formatSign(sign, chestShop);
+                return;
+            }
+            MPlayer mPlayer = MPlayerManager.getPlayerFromUUID(chestShop.getOwnerUUID());
+            if (mPlayer == null) {
+                return;
+            }
+            if (chestShop.getPrice() > mPlayer.getBalance()) {
+                Apied.sendMessage(player, "messages.shop.error.ownerInsufficientFunds");
+                formatSign(sign, chestShop);
+                return;
+            }
+            sellItems(player, chestShop);
+        }
+    }
+
+    public static void handleSignModify(Player player, Sign sign) {
+        ChestShop chestShop = getShopFromSign(sign);
+        if (chestShop == null) {
+            return;
+        }
+        if (chestShop.isRemoved()) {
+            return;
+        }
         ShopEventCount shopEventCount = shopEventCountMap.get(player.getUniqueId());
-        if (shopEventCount == null) {
-            if (!shopConfirmation.containsKey(player.getUniqueId()) || !shopConfirmation.get(player.getUniqueId()).equals(chestShop.getId())) {
-                shopConfirmation.put(player.getUniqueId(), chestShop.getId());
-                sendConfirmationMessage(player, chestShop);
-                return;
-            }
-            if (chestShop.getMaxUses() != 0) {
-                if (totalShopUses(chestShop.getId()) >= chestShop.getMaxUses()) {
-                    Apied.sendMessage(player, "messages.shop.error.maxUses");
-                    formatSign(sign, chestShop);
+        switch (shopEventCount.getType()) {
+            case "maxUses" -> {
+                if (!chestShop.getOwnerUUID().equals(player.getUniqueId()) && !ChestManager.chestOverride.contains(player)) {
+                    Apied.sendMessage(player, "messages.permissionDenied");
                     return;
                 }
-            }
-            if (chestShop.getMaxDailyUses() != 0) {
-                if (totalDailyShopUses(chestShop.getId()) >= chestShop.getMaxDailyUses()) {
-                    Apied.sendMessage(player, "messages.shop.error.maxDailyUses");
-                    formatSign(sign, chestShop);
-                    return;
+                chestShop.setMaxUses(shopEventCount.uses);
+                decrementChestEventCount(player.getUniqueId());
+                Apied.sendMessage(player, "messages.shop.modify.maxUses", "%count%", String.valueOf(shopEventCount.uses));
+                if (shopEventCount.count > 0) {
+                    Apied.sendMessage(player, "messages.shop.operationsleft", "%count%", String.valueOf(shopEventCount.count));
                 }
             }
-            if (chestShop.getMaxPlayerUses() != 0) {
-                if (playerShopUses(player.getUniqueId(), chestShop.getId()) >= chestShop.getMaxPlayerUses()) {
-                    Apied.sendMessage(player, "messages.shop.error.maxPlayerUses");
-                    formatSign(sign, chestShop);
+            case "maxPlayerUses" -> {
+                if (!chestShop.getOwnerUUID().equals(player.getUniqueId()) && !ChestManager.chestOverride.contains(player)) {
+                    Apied.sendMessage(player, "messages.permissionDenied");
                     return;
                 }
-            }
-            if (chestShop.getMaxPlayerDailyUses() != 0) {
-                if (playerDailyShopUses(player.getUniqueId(), chestShop.getId()) >= chestShop.getMaxPlayerDailyUses()) {
-                    Apied.sendMessage(player, "messages.shop.error.maxDailyPlayerUses");
-                    formatSign(sign, chestShop);
-                    return;
+                chestShop.setMaxPlayerUses(shopEventCount.uses);
+                decrementChestEventCount(player.getUniqueId());
+                Apied.sendMessage(player, "messages.shop.modify.maxPlayerUses", "%count%", String.valueOf(shopEventCount.uses));
+                if (shopEventCount.count > 0) {
+                    Apied.sendMessage(player, "messages.shop.operationsleft", "%count%", String.valueOf(shopEventCount.count));
                 }
             }
-            if (chestShop.getType().equals("BUY")) {
-                if (!hasRequiredItemsInChests(chestShop.getChestLocations(), chestShop.getItems())) {
-                    Apied.sendMessage(player, "messages.shop.error.missingItems");
-                    formatSign(sign, chestShop);
+            case "maxDailyUses" -> {
+                if (!chestShop.getOwnerUUID().equals(player.getUniqueId()) && !ChestManager.chestOverride.contains(player)) {
+                    Apied.sendMessage(player, "messages.permissionDenied");
                     return;
                 }
-                if (!hasEnoughInventorySpace(player, chestShop.getItems())) {
-                    Apied.sendMessage(player, "messages.shop.error.fullInventory");
-                    formatSign(sign, chestShop);
+                chestShop.setMaxDailyUses(shopEventCount.uses);
+                decrementChestEventCount(player.getUniqueId());
+                Apied.sendMessage(player, "messages.shop.modify.maxDailyUses", "%count%", String.valueOf(shopEventCount.uses));
+                if (shopEventCount.count > 0) {
+                    Apied.sendMessage(player, "messages.shop.operationsleft", "%count%", String.valueOf(shopEventCount.count));
+                }
+            }
+            case "maxPlayerDailyUses" -> {
+                if (!chestShop.getOwnerUUID().equals(player.getUniqueId()) && !ChestManager.chestOverride.contains(player)) {
+                    Apied.sendMessage(player, "messages.permissionDenied");
                     return;
                 }
-                MPlayer mPlayer = MPlayerManager.getPlayerFromPlayer(player);
-                if (mPlayer == null) {
-                    return;
+                chestShop.setMaxPlayerDailyUses(shopEventCount.uses);
+                decrementChestEventCount(player.getUniqueId());
+                Apied.sendMessage(player, "messages.shop.modify.maxPlayerDailyUses", "%count%", String.valueOf(shopEventCount.uses));
+                if (shopEventCount.count > 0) {
+                    Apied.sendMessage(player, "messages.shop.operationsleft", "%count%", String.valueOf(shopEventCount.count));
                 }
-                if (chestShop.getPrice() > mPlayer.getBalance()) {
-                    Apied.sendMessage(player, "messages.shop.error.insufficientFunds");
-                    formatSign(sign, chestShop);
-                    return;
-                }
-                buyItems(player, chestShop);
-            } else if (chestShop.getType().equals("SELL")) {
-                if (!hasEnoughStorageInChests(chestShop.getChestLocations(), chestShop.getItems())) {
-                    Apied.sendMessage(player, "messages.shop.error.noSpace");
-                    formatSign(sign, chestShop);
-                    return;
-                }
-                if (!hasRequiredItems(player, chestShop.getItems())) {
-                    Apied.sendMessage(player, "messages.shop.error.missingInventory");
-                    formatSign(sign, chestShop);
-                    return;
-                }
-                MPlayer mPlayer = MPlayerManager.getPlayerFromUUID(chestShop.getOwnerUUID());
-                if (mPlayer == null) {
-                    return;
-                }
-                if (chestShop.getPrice() > mPlayer.getBalance()) {
-                    Apied.sendMessage(player, "messages.shop.error.ownerInsufficientFunds");
-                    formatSign(sign, chestShop);
-                    return;
-                }
-                sellItems(player, chestShop);
-            }
-        } else if (shopEventCount.getType().equals("maxUses")) {
-            if (!chestShop.getOwnerUUID().equals(player.getUniqueId()) && !ChestManager.chestOverride.contains(player)) {
-                Apied.sendMessage(player, "messages.permissionDenied");
-                return;
-            }
-            chestShop.setMaxUses(shopEventCount.uses);
-            decrementChestEventCount(player.getUniqueId());
-            Apied.sendMessage(player, "messages.shop.modify.maxUses", "%count%", String.valueOf(shopEventCount.uses));
-            if (shopEventCount.count > 0) {
-                Apied.sendMessage(player, "messages.shop.operationsleft", "%count%", String.valueOf(shopEventCount.count));
-            }
-        } else if (shopEventCount.getType().equals("maxPlayerUses")) {
-            if (!chestShop.getOwnerUUID().equals(player.getUniqueId()) && !ChestManager.chestOverride.contains(player)) {
-                Apied.sendMessage(player, "messages.permissionDenied");
-                return;
-            }
-            chestShop.setMaxPlayerUses(shopEventCount.uses);
-            decrementChestEventCount(player.getUniqueId());
-            Apied.sendMessage(player, "messages.shop.modify.maxPlayerUses", "%count%", String.valueOf(shopEventCount.uses));
-            if (shopEventCount.count > 0) {
-                Apied.sendMessage(player, "messages.shop.operationsleft", "%count%", String.valueOf(shopEventCount.count));
-            }
-        } else if (shopEventCount.getType().equals("maxDailyUses")) {
-            if (!chestShop.getOwnerUUID().equals(player.getUniqueId()) && !ChestManager.chestOverride.contains(player)) {
-                Apied.sendMessage(player, "messages.permissionDenied");
-                return;
-            }
-            chestShop.setMaxDailyUses(shopEventCount.uses);
-            decrementChestEventCount(player.getUniqueId());
-            Apied.sendMessage(player, "messages.shop.modify.maxDailyUses", "%count%", String.valueOf(shopEventCount.uses));
-            if (shopEventCount.count > 0) {
-                Apied.sendMessage(player, "messages.shop.operationsleft", "%count%", String.valueOf(shopEventCount.count));
-            }
-        } else if (shopEventCount.getType().equals("maxPlayerDailyUses")) {
-            if (!chestShop.getOwnerUUID().equals(player.getUniqueId()) && !ChestManager.chestOverride.contains(player)) {
-                Apied.sendMessage(player, "messages.permissionDenied");
-                return;
-            }
-            chestShop.setMaxPlayerDailyUses(shopEventCount.uses);
-            decrementChestEventCount(player.getUniqueId());
-            Apied.sendMessage(player, "messages.shop.modify.maxPlayerDailyUses", "%count%", String.valueOf(shopEventCount.uses));
-            if (shopEventCount.count > 0) {
-                Apied.sendMessage(player, "messages.shop.operationsleft", "%count%", String.valueOf(shopEventCount.count));
             }
         }
     }
@@ -699,6 +719,28 @@ public class ShopManager {
             return true;
         }
         return frontValid && isEmptySide(backSide);
+    }
+
+    public static Side getSide(Sign sign) {
+        SignSide backSide = sign.getSide(Side.BACK);
+        SignSide frontSide = sign.getSide(Side.FRONT);
+
+        if (isValidSide(backSide) && isEmptySide(frontSide)) {
+            String line0 = backSide.getLine(0).trim().toUpperCase();
+            if (line0.equals("BUY") || line0.equals("KÖP")) {
+                return Side.BACK;
+            } else if (line0.equals("SELL") || line0.equals("SÄLJ")) {
+                return Side.BACK;
+            }
+        } else if (isValidSide(frontSide) && isEmptySide(backSide)) {
+            String line0 = frontSide.getLine(0).trim().toUpperCase();
+            if (line0.equals("BUY") || line0.equals("KÖP")) {
+                return Side.FRONT;
+            } else if (line0.equals("SELL") || line0.equals("SÄLJ")) {
+                return Side.FRONT;
+            }
+        }
+        return null;
     }
 
     private static boolean isValidSide(SignSide side) {

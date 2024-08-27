@@ -108,7 +108,7 @@ public class Utils {
     public static String locationListToString(List<Location> locations) {
         StringBuilder locationString = new StringBuilder();
         for (Location location : locations) {
-            locationString.append(location.toString()).append(",");
+            locationString.append(locationToString(location)).append(",");
         }
         return locationString.toString();
     }
