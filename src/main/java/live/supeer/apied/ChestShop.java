@@ -42,7 +42,7 @@ public class ChestShop {
         this.maxDailyUses = data.getInt("maxDailyUses");
         this.items = Utils.itemStackArrayFromBase64(data.getString("items"));
         this.dateTime = data.getLong("dateTime");
-        this.signSide = data.getString("signSide") != null ? Side.valueOf(data.getString("signSide")) : null;
+        this.signSide = data.getString("signSide") != null ? Side.valueOf(data.getString("signSide")) : Side.FRONT;
         this.removed = data.get("removed");
     }
 

@@ -3,6 +3,7 @@ package live.supeer.apied;
 import co.aikar.idb.DB;
 import co.aikar.idb.DbRow;
 import lombok.Getter;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 
 import java.sql.SQLException;
@@ -58,7 +59,7 @@ public class Chest {
     }
 
     public void removeShop(int shopId) {
-        linkedShopIds.remove(shopId);
+        linkedShopIds.remove((Integer) shopId);
         try {
             DB.executeUpdate("UPDATE `md_chests` SET `shops` = ? WHERE `id` = ?", Utils.integerListToString(linkedShopIds), this.id);
         } catch (SQLException e) {

@@ -62,6 +62,10 @@ import org.jetbrains.annotations.NotNull;
          return null;
      }
 
+     public static String componentToMiniMessage(Component component) {
+         return languageManager.getMiniMessage().serialize(component);
+     }
+
 
      private static @NotNull String getLocale(@NotNull CommandSender sender) {
          if (sender instanceof Player) {

@@ -4,8 +4,11 @@ import co.aikar.idb.DB;
 import co.aikar.idb.DbRow;
 import de.tr7zw.changeme.nbtapi.NBT;
 import de.tr7zw.changeme.nbtapi.iface.ReadableNBT;
+import io.papermc.paper.registry.keys.BiomeKeys;
 import lombok.Getter;
+import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -76,7 +79,7 @@ public class ShopManager {
 
     public static ChestShop getShopFromSign(Sign sign) {
         try {
-            DbRow row = DB.getFirstRow("SELECT * FROM md_shops WHERE signLocation = ?", Utils.locationToString(sign.getLocation()));
+            DbRow row = DB.getFirstRow("SELECT * FROM md_shops WHERE signLocation = ? AND removed = 0", Utils.locationToString(sign.getLocation()));
             return row != null ? new ChestShop(row) : null;
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -175,8 +178,13 @@ public class ShopManager {
             for (DbRow row : rows) {
                 ChestShop chestShop = new ChestShop(row);
                 chestShop.removeChestLocation(chestLocation);
-                Sign sign = (Sign) chestShop.getSignLocation().getBlock().getState();
-                formatSign(sign, chestShop);
+                BlockState blockState = chestShop.getSignLocation().getBlock().getState();
+                if (blockState instanceof Sign) {
+                    Sign sign = (Sign) blockState;
+                    formatSign(sign, chestShop);
+                } else {
+                    Apied.getInstance().getLogger().warning("Expected a Sign block state but found: " + blockState.getClass().getName());
+                }
             }
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -186,9 +194,6 @@ public class ShopManager {
     public static void handleSignRemoval(Location signLocation) {
         try {
             String signLocationString = Utils.locationToString(signLocation);
-            // Log the sign location string for debugging
-            System.out.println("Sign Location String: " + signLocationString);
-
             DbRow row = DB.getFirstRow("SELECT * FROM md_shops WHERE signLocation = ?", signLocationString);
             if (row != null) {
                 ChestShop chestShop = new ChestShop(row);
@@ -201,7 +206,6 @@ public class ShopManager {
                 chestShop.setRemoved(true);
             }
         } catch (Exception e) {
-            // Log the exception for debugging
             e.printStackTrace();
             throw new RuntimeException(e);
         }
@@ -267,6 +271,7 @@ public class ShopManager {
             }
             buyItems(player, chestShop);
         } else if (chestShop.getType().equals("SELL")) {
+            player.sendMessage(Arrays.toString(chestShop.getItems()));
             if (!hasEnoughStorageInChests(chestShop.getChestLocations(), chestShop.getItems())) {
                 Apied.sendMessage(player, "messages.shop.error.noSpace");
                 formatSign(sign, chestShop);
@@ -362,9 +367,15 @@ public class ShopManager {
         MPlayer buyer = MPlayerManager.getPlayerFromPlayer(player);
         MPlayer seller = MPlayerManager.getPlayerFromUUID(chestShop.getOwnerUUID());
 
-        if (buyer != null && seller != null) {
-            buyer.removeBalance(chestShop.getPrice(), "{ \"type\": \"shop\", \"subtype\": \"buySelf\", \"playerUUID\": \"" + seller.getUuid() + "\", \"shopId\": " + chestShop.getId() + "}");
-            seller.addBalance(chestShop.getPrice(), "{ \"type\": \"shop\", \"subtype\": \"buyOther\", \"playerUUID\": \"" + buyer.getUuid() + "\", \"shopId\": " + chestShop.getId() + "}");
+        if (chestShop.getPrice() > 0) {
+            if (buyer == null || seller == null) {
+                Apied.getInstance().getLogger().warning("The buyer or seller of a signshop transaction is null. Buyer: " + buyer + ", Seller: " + seller);
+                return;
+            }
+            if (!buyer.getUuid().equals(seller.getUuid())) {
+                buyer.removeBalance(chestShop.getPrice(), "{ \"type\": \"shop\", \"subtype\": \"buySelf\", \"playerUUID\": \"" + seller.getUuid() + "\", \"shopId\": " + chestShop.getId() + "}");
+                seller.addBalance(chestShop.getPrice(), "{ \"type\": \"shop\", \"subtype\": \"buyOther\", \"playerUUID\": \"" + buyer.getUuid() + "\", \"shopId\": " + chestShop.getId() + "}");
+            }
         }
 
         // Update sign
@@ -375,6 +386,8 @@ public class ShopManager {
         logTransaction(player.getUniqueId(), chestShop.getId(), chestShop.getPrice());
 
         // Send messages
+        player.sendMessage(chestShop.getItems().toString());
+        player.sendMessage(chestShop.getItems().length + "");
         if (chestShop.getItems().length == 1) {
             Apied.sendMessage(player,"messages.shop.success.buy.single", "%item%", itemFormatting(chestShop.getItems()[0]), "%price%", Utils.formattedMoney(chestShop.getPrice()));
         } else {
@@ -565,7 +578,7 @@ public class ShopManager {
 
     private static String getItemKey(ItemStack item) {
         ReadableNBT nbt = NBT.itemStackToNBT(item);
-        return item.getType().getKey().toString() + nbt.toString();
+        return item.getType().getKey() + nbt.toString();
     }
 
     private static String getHoverInfo(ItemStack item) {
@@ -573,9 +586,9 @@ public class ShopManager {
         if (Apied.configuration.getBannedPreviewItems().contains(itemId)) {
             return "<hover:show_item:'" + itemId + "':" + 1 + ">";
         }
-        ReadableNBT nbt = NBT.itemStackToNBT(item);
-        String nbtString = nbt.toString();
-        return "<hover:show_item:'" + itemId + "':" + 1 + ":'" + nbtString + "'>";
+        String hoverString = Apied.componentToMiniMessage(Component.text().hoverEvent(item).asComponent());
+        int index = hoverString.indexOf(":", hoverString.indexOf(":", hoverString.indexOf(":") + 1) + 1);
+        return hoverString.substring(0, index + 1) + "1" + hoverString.substring(index + 2);
     }
 
     public static int getBalance(Sign sign) {
@@ -583,9 +596,9 @@ public class ShopManager {
         SignSide frontSide = sign.getSide(Side.FRONT);
 
         if (isValidSide(backSide) && isEmptySide(frontSide)) {
-            return Integer.parseInt(backSide.getLine(3).trim());
+            return Integer.parseInt(PlainTextComponentSerializer.plainText().serialize(backSide.line(3)).replaceAll("[^\\d]", "").trim());
         } else if (isValidSide(frontSide) && isEmptySide(backSide)) {
-            return Integer.parseInt(frontSide.getLine(3).trim());
+            return Integer.parseInt(PlainTextComponentSerializer.plainText().serialize(frontSide.line(3)).replaceAll("[^\\d]", "").trim());
         }
         return 0;
     }
@@ -595,14 +608,14 @@ public class ShopManager {
         SignSide frontSide = sign.getSide(Side.FRONT);
 
         if (isValidSide(backSide) && isEmptySide(frontSide)) {
-            String line0 = backSide.getLine(0).trim().toUpperCase();
+            String line0 = PlainTextComponentSerializer.plainText().serialize(backSide.line(0)).trim();
             if (line0.equals("BUY") || line0.equals("KÖP")) {
                 return "BUY";
             } else if (line0.equals("SELL") || line0.equals("SÄLJ")) {
                 return "SELL";
             }
         } else if (isValidSide(frontSide) && isEmptySide(backSide)) {
-            String line0 = frontSide.getLine(0).trim().toUpperCase();
+            String line0 = PlainTextComponentSerializer.plainText().serialize(frontSide.line(0)).trim();
             if (line0.equals("BUY") || line0.equals("KÖP")) {
                 return "BUY";
             } else if (line0.equals("SELL") || line0.equals("SÄLJ")) {
@@ -708,55 +721,45 @@ public class ShopManager {
         return true;
     }
 
-    public static boolean validSign(Sign sign) {
-        SignSide backSide = sign.getSide(Side.BACK);
-        SignSide frontSide = sign.getSide(Side.FRONT);
-
-        boolean backValid = isValidSide(backSide);
-        boolean frontValid = isValidSide(frontSide);
-
-        if (backValid && isEmptySide(frontSide)) {
-            return true;
-        }
-        return frontValid && isEmptySide(backSide);
-    }
-
     public static Side getSide(Sign sign) {
         SignSide backSide = sign.getSide(Side.BACK);
         SignSide frontSide = sign.getSide(Side.FRONT);
-
         if (isValidSide(backSide) && isEmptySide(frontSide)) {
-            String line0 = backSide.getLine(0).trim().toUpperCase();
-            if (line0.equals("BUY") || line0.equals("KÖP")) {
-                return Side.BACK;
-            } else if (line0.equals("SELL") || line0.equals("SÄLJ")) {
-                return Side.BACK;
-            }
+            return Side.BACK;
         } else if (isValidSide(frontSide) && isEmptySide(backSide)) {
-            String line0 = frontSide.getLine(0).trim().toUpperCase();
-            if (line0.equals("BUY") || line0.equals("KÖP")) {
-                return Side.FRONT;
-            } else if (line0.equals("SELL") || line0.equals("SÄLJ")) {
-                return Side.FRONT;
-            }
+            return Side.FRONT;
         }
         return null;
     }
 
-    private static boolean isValidSide(SignSide side) {
-        String line0 = side.getLine(0).trim().toUpperCase();
-        String line3 = side.getLine(3).trim();
+    public static boolean isValidSign(Sign sign) {
+        SignSide backSide = sign.getSide(Side.BACK);
+        SignSide frontSide = sign.getSide(Side.FRONT);
+        return (isValidSide(backSide) && isEmptySide(frontSide)) || (isValidSide(frontSide) && isEmptySide(backSide));
+    }
 
+    private static boolean isValidSide(SignSide side) {
+        // Get the raw text from the Component, stripping all formatting
+        String line0 = PlainTextComponentSerializer.plainText().serialize(side.line(0)).trim();
+
+        // Extract only the digits from line3, also after stripping formatting
+        String line3 = PlainTextComponentSerializer.plainText().serialize(side.line(3)).replaceAll("[^\\d]", "").trim();
+
+        // Check if line0 is a valid shop type
         if (!("BUY".equals(line0) || "SELL".equals(line0) || "KÖP".equals(line0) || "SÄLJ".equals(line0))) {
             return false;
         }
+
         try {
+            // Ensure line3 is not empty and can be parsed as an integer
             Integer.parseInt(line3);
             return true;
         } catch (NumberFormatException e) {
             return false;
         }
     }
+
+
 
     private static boolean isEmptySide(SignSide side) {
         for (int i = 0; i < 4; i++) {
@@ -869,6 +872,9 @@ public class ShopManager {
         Map<Material, Integer> requiredCounts = new HashMap<>();
 
         for (ItemStack item : itemsToStore) {
+            if (item == null) {
+                continue;
+            }
             requiredCounts.put(item.getType(), requiredCounts.getOrDefault(item.getType(), 0) + item.getAmount());
         }
 
@@ -902,36 +908,46 @@ public class ShopManager {
         Inventory inventory = player.getInventory();
         Map<Material, Integer> requiredCounts = new HashMap<>();
 
+        // Calculate the total required amounts for each material
         for (ItemStack item : itemsToStore) {
             requiredCounts.put(item.getType(), requiredCounts.getOrDefault(item.getType(), 0) + item.getAmount());
         }
 
+        // Check inventory space for each required material
         for (Map.Entry<Material, Integer> entry : requiredCounts.entrySet()) {
             Material material = entry.getKey();
             int requiredAmount = entry.getValue();
 
+            // Check for existing stacks of the same material in the inventory
             for (ItemStack inventoryItem : inventory.getContents()) {
                 if (inventoryItem != null && inventoryItem.getType() == material) {
                     int availableSpace = inventoryItem.getMaxStackSize() - inventoryItem.getAmount();
-                    requiredAmount -= availableSpace;
+                    if (availableSpace > 0) {
+                        int amountToStore = Math.min(availableSpace, requiredAmount);
+                        requiredAmount -= amountToStore;
+                    }
                     if (requiredAmount <= 0) {
                         break;
                     }
                 }
             }
 
+            // Check for empty slots in the inventory
             while (requiredAmount > 0) {
                 int emptySlot = inventory.firstEmpty();
                 if (emptySlot == -1) {
+                    // No empty slots left
                     return false;
                 }
-                requiredAmount -= material.getMaxStackSize();
+                // Assume we can place a full stack in the empty slot
+                int amountToStore = Math.min(requiredAmount, material.getMaxStackSize());
+                requiredAmount -= amountToStore;
             }
         }
 
-        return requiredCounts.values().stream().allMatch(count -> count <= 0);
+        // If we have satisfied the requirement for all materials, return true
+        return true;
     }
-
 
     public static int getEmptySlotsInInventory(Inventory inventory) {
         int emptySlots = 0;
