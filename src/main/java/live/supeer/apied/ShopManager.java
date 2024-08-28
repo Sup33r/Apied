@@ -359,8 +359,10 @@ public class ShopManager {
     public static void buyItems(Player player, ChestShop chestShop) {
         // Remove items from chests and add to player inventory
         for (ItemStack item : chestShop.getItems()) {
-            removeItemFromChests(chestShop.getChestLocations(), item);
-            player.getInventory().addItem(item);
+            // Clone the item before modifying it
+            ItemStack itemToAdd = item.clone();
+            removeItemFromChests(chestShop.getChestLocations(), itemToAdd);
+            player.getInventory().addItem(itemToAdd);
         }
 
         // Handle balance
@@ -384,10 +386,6 @@ public class ShopManager {
 
         // Log transaction
         logTransaction(player.getUniqueId(), chestShop.getId(), chestShop.getPrice());
-
-        // Send messages
-        player.sendMessage(chestShop.getItems().toString());
-        player.sendMessage(chestShop.getItems().length + "");
         if (chestShop.getItems().length == 1) {
             Apied.sendMessage(player,"messages.shop.success.buy.single", "%item%", itemFormatting(chestShop.getItems()[0]), "%price%", Utils.formattedMoney(chestShop.getPrice()));
         } else {
@@ -395,6 +393,7 @@ public class ShopManager {
         }
         scheduleRecap(chestShop.getOwnerUUID(), new TransactionInfo(player.getUniqueId(), "BUY", chestShop.getPrice(), chestShop.getId()));
     }
+
 
     public static void sellItems(Player player, ChestShop chestShop) {
         // Remove items from player inventory and add to chests
@@ -406,10 +405,15 @@ public class ShopManager {
         // Handle balance
         MPlayer seller = MPlayerManager.getPlayerFromPlayer(player);
         MPlayer buyer = MPlayerManager.getPlayerFromUUID(chestShop.getOwnerUUID());
-
-        if (seller != null && buyer != null) {
-            seller.addBalance(chestShop.getPrice(), "{ \"type\": \"shop\", \"subtype\": \"sellSelf\", \"playerUUID\": \"" + buyer.getUuid() + "\", \"shopId\": " + chestShop.getId() + "}");
-            buyer.removeBalance(chestShop.getPrice(), "{ \"type\": \"shop\", \"subtype\": \"sellOther\", \"playerUUID\": \"" + seller.getUuid() + "\", \"shopId\": " + chestShop.getId() + "}");
+        if (chestShop.getPrice() > 0) {
+            if (buyer == null || seller == null) {
+                Apied.getInstance().getLogger().warning("The buyer or seller of a signshop transaction is null. Buyer: " + buyer + ", Seller: " + seller);
+                return;
+            }
+            if (!buyer.getUuid().equals(seller.getUuid())) {
+                seller.addBalance(chestShop.getPrice(), "{ \"type\": \"shop\", \"subtype\": \"sellSelf\", \"playerUUID\": \"" + buyer.getUuid() + "\", \"shopId\": " + chestShop.getId() + "}");
+                buyer.removeBalance(chestShop.getPrice(), "{ \"type\": \"shop\", \"subtype\": \"sellOther\", \"playerUUID\": \"" + seller.getUuid() + "\", \"shopId\": " + chestShop.getId() + "}");
+            }
         }
 
         // Update sign
@@ -418,7 +422,6 @@ public class ShopManager {
 
         // Log transaction
         logTransaction(player.getUniqueId(), chestShop.getId(), chestShop.getPrice());
-
         // Send messages
         if (chestShop.getItems().length == 1) {
             Apied.sendMessage(player,"messages.shop.success.sell.single", "%item%", itemFormatting(chestShop.getItems()[0]), "%price%", Utils.formattedMoney(chestShop.getPrice()));
@@ -501,7 +504,7 @@ public class ShopManager {
                 ? Apied.getMessage("messages.word.count.singular")
                 : Apied.getMessage("messages.word.count.plural");
 
-            return "   " + item.getAmount() + " " + plural + " " + hoverInfo + translatable + "</hover>\n";
+            return item.getAmount() + " " + plural + " " + hoverInfo + translatable + "</hover>";
     }
 
     public static String chestFormatting(Location chestLocation, int price)  {
@@ -553,7 +556,6 @@ public class ShopManager {
                 String plural = stackSize == 1
                         ? Apied.getMessage("messages.word.count.singular")
                         : Apied.getMessage("messages.word.count.plural");
-
                 formattedItems.append("   ")
                         .append(stackSize * count)
                         .append(" ")
@@ -587,8 +589,7 @@ public class ShopManager {
             return "<hover:show_item:'" + itemId + "':" + 1 + ">";
         }
         String hoverString = Apied.componentToMiniMessage(Component.text().hoverEvent(item).asComponent());
-        int index = hoverString.indexOf(":", hoverString.indexOf(":", hoverString.indexOf(":") + 1) + 1);
-        return hoverString.substring(0, index + 1) + "1" + hoverString.substring(index + 2);
+        return hoverString.replaceAll(":(\\d+):", ":1:");
     }
 
     public static int getBalance(Sign sign) {
@@ -960,6 +961,18 @@ public class ShopManager {
     }
 
     public static boolean hasEnoughStorageInChests(List<Location> chestLocations, ItemStack[] itemsToStore) {
+        // Create a map to track the total amount needed for each material
+        Map<Material, Integer> requiredCounts = new HashMap<>();
+
+        // Aggregate the total required amounts for each material
+        for (ItemStack item : itemsToStore) {
+            if (item == null) {
+                continue;
+            }
+            requiredCounts.put(item.getType(), requiredCounts.getOrDefault(item.getType(), 0) + item.getAmount());
+        }
+
+        // Check each chest and try to store items
         for (Location chestLocation : chestLocations) {
             Block block = chestLocation.getBlock();
             InventoryHolder chest = null;
@@ -972,12 +985,54 @@ public class ShopManager {
                 chest = (Barrel) block.getState();
             }
 
-            if (chest != null && hasEnoughStorageInChest(chest, itemsToStore)) {
+            if (chest != null) {
+                Inventory inventory = chest.getInventory();
+
+                for (Map.Entry<Material, Integer> entry : requiredCounts.entrySet()) {
+                    Material material = entry.getKey();
+                    int requiredAmount = entry.getValue();
+
+                    // Check for available space in existing stacks of the same material
+                    for (ItemStack inventoryItem : inventory.getContents()) {
+                        if (inventoryItem != null && inventoryItem.getType() == material) {
+                            int availableSpace = inventoryItem.getMaxStackSize() - inventoryItem.getAmount();
+                            int usedSpace = Math.min(requiredAmount, availableSpace);
+                            requiredAmount -= usedSpace;
+                        }
+                    }
+
+                    // If required amount is still greater than 0, check empty slots
+                    while (requiredAmount > 0) {
+                        int emptySlot = inventory.firstEmpty();
+                        if (emptySlot == -1) {
+                            break; // No more empty slots in this chest
+                        }
+                        requiredAmount -= material.getMaxStackSize();
+                    }
+
+                    // Update the remaining required amount after this chest
+                    requiredCounts.put(material, requiredAmount);
+
+                    // If we have no more of this material to store, move on to the next material
+                    if (requiredAmount <= 0) {
+                        break;
+                    }
+                }
+            }
+
+            // After checking this chest, remove materials that are fully stored
+            requiredCounts.entrySet().removeIf(entry -> entry.getValue() <= 0);
+
+            // If there are no more items to store, return true
+            if (requiredCounts.isEmpty()) {
                 return true;
             }
         }
+
+        // If we still have items to store, return false
         return false;
     }
+
 
     public static void startShopEventCount(Player player, String type, int uses, int count) {
         shopEventCountMap.put(player.getUniqueId(), new ShopEventCount(count, type, player.getUniqueId(), uses));
