@@ -225,9 +225,10 @@ public class Utils {
             dataOutput.writeInt(nonNullItemCount);
 
             // Write only non-null items to the output stream
-            for (ItemStack item : items) {
+            for (int i = 0; i < items.length; i++) {
+                ItemStack item = items[i];
                 if (item != null) {
-                    dataOutput.writeInt(Arrays.asList(items).indexOf(item)); // Store the index
+                    dataOutput.writeInt(i); // Store the index directly from the loop
                     dataOutput.writeObject(item);
                 }
             }
@@ -238,5 +239,4 @@ public class Utils {
             throw new IllegalStateException("Unable to save item stacks.", e);
         }
     }
-
 }

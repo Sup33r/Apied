@@ -559,7 +559,11 @@ public class ShopManager {
         if (inventory == null) {
             return "Invalid container";
         }
-        return itemsFormatting(inventory.getContents(), price);
+        if (inventory.getContents().length > 1) {
+            return itemsFormatting(inventory.getContents(), price);
+
+        }
+        return itemFormatting(Objects.requireNonNull(inventory.getContents()[0]));
     }
 
     public static String itemsFormatting(ItemStack[] itemStacks, int price) {
