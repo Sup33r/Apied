@@ -12,6 +12,7 @@ settings:
     maxitems: 9
     maxchests: 5
     maxdistance: 48
+    maxprice: 100000
 
     bannedpreviewitems:
       - "minecraft:written_book"

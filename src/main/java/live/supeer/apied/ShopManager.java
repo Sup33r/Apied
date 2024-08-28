@@ -86,6 +86,15 @@ public class ShopManager {
         }
     }
 
+    public static ChestShop getShopFromId(int shopId) {
+        try {
+            DbRow row = DB.getFirstRow("SELECT * FROM md_shops WHERE id = ?", shopId);
+            return row != null ? new ChestShop(row) : null;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     private static void logTransaction(UUID playerUUID, int shopId, int price) {
         try {
             DB.executeInsert("INSERT INTO md_shoptransactions (shopId, uuid, dateTime, price) VALUES (?, ?, ?, ?)",
@@ -119,6 +128,14 @@ public class ShopManager {
         }
         if (chestLocation.distance(signLocation) > Apied.configuration.getShopMaxDistance()) {
             Apied.sendMessage(player, "messages.shop.error.tooFarAway", "%max%", String.valueOf(Apied.configuration.getShopMaxDistance()), "%distance%", String.valueOf((int) chestLocation.distance(signLocation)));
+            return;
+        }
+        if (getBalance(sign) == 0) {
+            Apied.sendMessage(player, "messages.shop.error.noBalance");
+            return;
+        }
+        if (getBalance(sign) > Apied.configuration.getShopMaxPrice()) {
+            Apied.sendMessage(player, "messages.shop.error.maxPrice", "%max%", String.valueOf(Apied.configuration.getShopMaxPrice()));
             return;
         }
         ChestShop chestShop = getShopFromSign(sign);
@@ -213,7 +230,10 @@ public class ShopManager {
 
     public static void handleSignClick(Player player, Sign sign, Side clickedSide) {
         ChestShop chestShop = getShopFromSign(sign);
-        if (chestShop == null || chestShop.isRemoved() || !(chestShop.getSignSide() == clickedSide)) {
+        if (chestShop == null || chestShop.isRemoved()) {
+            return;
+        }
+        if (chestShop.getSignSide() != clickedSide) {
             return;
         }
         if (!shopConfirmation.containsKey(player.getUniqueId()) || !shopConfirmation.get(player.getUniqueId()).equals(chestShop.getId())) {
@@ -356,6 +376,20 @@ public class ShopManager {
         }
     }
 
+    public static void handleChestClose(Location chestLocation) {
+        Chest chest = ChestManager.getClaimedChest(chestLocation);
+        if (chest == null) {
+            return;
+        }
+        for (ChestShop chestShop : chest.getShops()) {
+            if (chestShop == null) {
+                continue;
+            }
+            Sign sign = (Sign) chestShop.getSignLocation().getBlock().getState();
+            formatSign(sign, chestShop);
+        }
+    }
+
     public static void buyItems(Player player, ChestShop chestShop) {
         // Remove items from chests and add to player inventory
         for (ItemStack item : chestShop.getItems()) {
@@ -398,8 +432,9 @@ public class ShopManager {
     public static void sellItems(Player player, ChestShop chestShop) {
         // Remove items from player inventory and add to chests
         for (ItemStack item : chestShop.getItems()) {
-            player.getInventory().removeItem(item);
-            addItemToChests(chestShop.getChestLocations(), item);
+            ItemStack itemToRemove = item.clone();
+            player.getInventory().removeItem(itemToRemove);
+            addItemToChests(chestShop.getChestLocations(), itemToRemove);
         }
 
         // Handle balance
@@ -438,7 +473,7 @@ public class ShopManager {
             BukkitTask task = Bukkit.getScheduler().runTaskLater(Apied.getInstance(), () -> {
                 sendRecap(ownerUUID);
                 scheduledRecapTasks.remove(ownerUUID);
-            }, 20 * 60 * 15); // 15 minutes in ticks
+            }, 20 * 30 * 1); // 15 minutes in ticks
 
             scheduledRecapTasks.put(ownerUUID, task);
         }
@@ -471,10 +506,10 @@ public class ShopManager {
         }
         Apied.sendMessage(owner, "messages.shop.recap.header");
         if (hasBuy) {
-            Apied.sendMessage(owner, "messages.shop.recap.buy", "%amount%", Utils.formattedMoney(totalBuy));
+            Apied.sendMessage(owner, "messages.shop.recap.sold", "%amount%", Utils.formattedMoney(totalBuy));
         }
         if (hasSell) {
-            Apied.sendMessage(owner, "messages.shop.recap.sell", "%amount%", Utils.formattedMoney(totalSell));
+            Apied.sendMessage(owner, "messages.shop.recap.bought", "%amount%", Utils.formattedMoney(totalSell));
         }
     }
 
@@ -632,6 +667,7 @@ public class ShopManager {
         TextComponent comp1 = null;
         TextComponent comp2 = null;
         String type;
+
         if (chestShop == null) {
             type = getType(sign);
             if (type == null) {
@@ -651,24 +687,26 @@ public class ShopManager {
             if (type == null) {
                 return;
             }
-            if (ShopManager.hasRequiredItemsInChests(chestShop.getChestLocations(), chestShop.getItems())) {
-                if (type.equals("BUY")) {
+
+            // Check if the chest shop is stocked based on type
+            if (type.equals("BUY")) {
+                if (ShopManager.hasRequiredItemsInChests(chestShop.getChestLocations(), chestShop.getItems())) {
                     comp1 = (TextComponent) Apied.getMessageComponent("messages.shop.sign.stocked.buy");
-                    comp2 = (TextComponent) Apied.getMessageComponent("messages.shop.sign.price", "%price%", Utils.formattedMoney(getBalance(sign)));
-                } else if (type.equals("SELL")) {
-                    comp1 = (TextComponent) Apied.getMessageComponent("messages.shop.sign.stocked.sell");
-                    comp2 = (TextComponent) Apied.getMessageComponent("messages.shop.sign.price", "%price%", Utils.formattedMoney(getBalance(sign)));
-                }
-            } else {
-                if (type.equals("BUY")) {
+                } else {
                     comp1 = (TextComponent) Apied.getMessageComponent("messages.shop.sign.unstocked.buy");
-                    comp2 = (TextComponent) Apied.getMessageComponent("messages.shop.sign.price", "%price%", Utils.formattedMoney(getBalance(sign)));
-                } else if (type.equals("SELL")) {
-                    comp1 = (TextComponent) Apied.getMessageComponent("messages.shop.sign.unstocked.sell");
-                    comp2 = (TextComponent) Apied.getMessageComponent("messages.shop.sign.price", "%price%", Utils.formattedMoney(getBalance(sign)));
                 }
+                comp2 = (TextComponent) Apied.getMessageComponent("messages.shop.sign.price", "%price%", Utils.formattedMoney(chestShop.getPrice()));
+            } else if (type.equals("SELL")) {
+                if (hasEnoughStorageInChests(chestShop.getChestLocations(), chestShop.getItems())) {
+                    comp1 = (TextComponent) Apied.getMessageComponent("messages.shop.sign.stocked.sell");
+                } else {
+                    comp1 = (TextComponent) Apied.getMessageComponent("messages.shop.sign.unstocked.sell");
+                }
+                comp2 = (TextComponent) Apied.getMessageComponent("messages.shop.sign.price", "%price%", Utils.formattedMoney(chestShop.getPrice()));
             }
         }
+
+        // Update the sign text based on the valid side and the text components
         if (isValidSide(backSide) && isEmptySide(frontSide)) {
             assert comp1 != null;
             backSide.line(0, comp1);
@@ -680,9 +718,11 @@ public class ShopManager {
             assert comp2 != null;
             frontSide.line(3, comp2);
         }
+
         sign.setWaxed(true);
         sign.update();
     }
+
 
     public static boolean validChest(Location location, Player player) {
         Block block = location.getBlock();

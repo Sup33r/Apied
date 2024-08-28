@@ -7,6 +7,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -65,5 +66,16 @@ public class Chest {
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public List<ChestShop> getShops() {
+        List<ChestShop> shops = new ArrayList<>();
+        for (int shopId : linkedShopIds) {
+            ChestShop shop = ShopManager.getShopFromId(shopId);
+            if (shop != null) {
+                shops.add(shop);
+            }
+        }
+        return shops;
     }
 }

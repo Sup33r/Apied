@@ -44,6 +44,8 @@ messages:
         sell: "<green>Du har skapat en affär där kunderna kan kan sälja...\n%items%"
         buy: "<green>Du har skapat en affär där kunderna kan köpa...\n%items%"
     error:
+      noBalance: "<red>Priset på skyltaffären kan inte vara noll.</red>"
+      maxPrice: "<red>Priset på skyltaffären överstiger maxgränsen på %max% encoins.</red>"
       insufficientFunds: "<red>Du har inte råd att genomföra köpet.</red>"
       ownerInsufficientFunds: "<red>Ägaren av affären har inte råd att köpa dina föremål.</red>"
       maxUses: "<red>Affären har uppnått sin gräns för antalet transaktioner.</red>"

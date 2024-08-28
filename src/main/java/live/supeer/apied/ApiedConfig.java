@@ -19,6 +19,8 @@ public class ApiedConfig {
     private final int shopMaxItems;
     private final int shopMaxChests;
     private final int shopMaxDistance;
+    private final int shopMaxPrice;
+
     private final List<String> bannedPreviewItems;
 
     ApiedConfig(Apied plugin) {
@@ -36,6 +38,8 @@ public class ApiedConfig {
         shopMaxItems = plugin.getConfig().getInt("settings.shop.maxitems");
         shopMaxChests = plugin.getConfig().getInt("settings.shop.maxchests");
         shopMaxDistance = plugin.getConfig().getInt("settings.shop.maxdistance");
+        shopMaxPrice = plugin.getConfig().getInt("settings.shop.maxprice");
+
         bannedPreviewItems = plugin.getConfig().getStringList("settings.shop.bannedpreviewitems");
     }
 
