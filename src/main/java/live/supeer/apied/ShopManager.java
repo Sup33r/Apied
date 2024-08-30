@@ -138,6 +138,15 @@ public class ShopManager {
             Apied.sendMessage(player, "messages.shop.error.maxPrice", "%max%", String.valueOf(Apied.configuration.getShopMaxPrice()));
             return;
         }
+        Inventory inventory = chestLocation.getBlock().getState() instanceof InventoryHolder inventoryHolder ? inventoryHolder.getInventory() : null;
+        if (inventory == null) {
+            Apied.sendMessage(player, "messages.chest.error.notFound");
+            return;
+        }
+        if (inventory.getContents().length == 0) {
+            Apied.sendMessage(player, "messages.chest.error.empty");
+            return;
+        }
         ChestShop chestShop = getShopFromSign(sign);
         if  (chestShop == null) {
             if (!validChest(chestLocation, player)) {
@@ -163,6 +172,7 @@ public class ShopManager {
                 return;
             }
             chestShop.addChestLocation(chestLocation);
+            chest.addShop(chestShop.getId());
             formatSign(sign, chestShop);
             Apied.sendMessage(player, "messages.shop.success.addChest");
         }
@@ -196,8 +206,7 @@ public class ShopManager {
                 ChestShop chestShop = new ChestShop(row);
                 chestShop.removeChestLocation(chestLocation);
                 BlockState blockState = chestShop.getSignLocation().getBlock().getState();
-                if (blockState instanceof Sign) {
-                    Sign sign = (Sign) blockState;
+                if (blockState instanceof Sign sign) {
                     formatSign(sign, chestShop);
                 } else {
                     Apied.getInstance().getLogger().warning("Expected a Sign block state but found: " + blockState.getClass().getName());
@@ -391,9 +400,7 @@ public class ShopManager {
     }
 
     public static void buyItems(Player player, ChestShop chestShop) {
-        // Remove items from chests and add to player inventory
         for (ItemStack item : chestShop.getItems()) {
-            // Clone the item before modifying it
             ItemStack itemToAdd = item.clone();
             removeItemFromChests(chestShop.getChestLocations(), itemToAdd);
             player.getInventory().addItem(itemToAdd);
@@ -617,11 +624,6 @@ public class ShopManager {
         return formattedItems.toString();
     }
 
-    private static String getItemKey(ItemStack item) {
-        ReadableNBT nbt = NBT.itemStackToNBT(item);
-        return item.getType().getKey() + nbt.toString();
-    }
-
     private static String getHoverInfo(ItemStack item) {
         String itemId = item.getType().getKey().toString().toLowerCase();
         if (Apied.configuration.getBannedPreviewItems().contains(itemId)) {
@@ -832,17 +834,44 @@ public class ShopManager {
         return null;
     }
 
-    private static void removeItemFromChests(List<Location> chestLocations, ItemStack itemToRemove) {
+    public static void removeItemFromChests(List<Location> chestLocations, ItemStack itemToRemove) {
+        List<Inventory> inventories = new ArrayList<>();
         int amountToRemove = itemToRemove.getAmount();
-        for (Location location : chestLocations) {
-            Block block = location.getBlock();
-            if (block.getState() instanceof InventoryHolder) {
-                Inventory inventory = ((InventoryHolder) block.getState()).getInventory();
+        String key = getItemKey(itemToRemove);
+
+        for (Location chestLocation : chestLocations) {
+            Block block = chestLocation.getBlock();
+            Inventory inventory = null;
+
+            if (block.getState() instanceof org.bukkit.block.Chest chest) {
+                inventory = chest.getInventory();
+            } else if (block.getState() instanceof ShulkerBox shulkerBox) {
+                inventory = shulkerBox.getInventory();
+            } else if (block.getState() instanceof Barrel barrel) {
+                inventory = barrel.getInventory();
+            } else if (block.getState() instanceof DoubleChest doubleChest) {
+                inventory = doubleChest.getInventory();
+            }
+
+            if (inventory != null) {
+                inventories.add(inventory);
+            }
+        }
+
+        VirtualInventory virtualInventory = new VirtualInventory(inventories);
+        if (virtualInventory.hasItems(new ItemStack[]{itemToRemove})) {
+            for (Inventory inventory : inventories) {
                 for (ItemStack item : inventory.getContents()) {
-                    if (item != null && item.isSimilar(itemToRemove)) {
-                        int amount = Math.min(amountToRemove, item.getAmount());
-                        item.setAmount(item.getAmount() - amount);
-                        amountToRemove -= amount;
+                    if (item != null && item.getType() != Material.AIR && getItemKey(item).equals(key)) {
+                        int currentAmount = item.getAmount();
+                        if (currentAmount <= amountToRemove) {
+                            amountToRemove -= currentAmount;
+                            inventory.remove(item);
+                        } else {
+                            item.setAmount(currentAmount - amountToRemove);
+                            amountToRemove = 0;
+                        }
+
                         if (amountToRemove <= 0) {
                             return;
                         }
@@ -892,61 +921,34 @@ public class ShopManager {
     }
 
     public static boolean hasRequiredItemsInChests(List<Location> chestLocations, ItemStack[] requiredItems) {
+        List<Inventory> inventories = new ArrayList<>();
+
         for (Location chestLocation : chestLocations) {
             Block block = chestLocation.getBlock();
-            InventoryHolder chest = null;
+            Inventory inventory = null;
 
-            if (block.getState() instanceof org.bukkit.block.Chest) {
-                chest = (org.bukkit.block.Chest) block.getState();
-            } else if (block.getState() instanceof ShulkerBox) {
-                chest = (ShulkerBox) block.getState();
-            } else if (block.getState() instanceof Barrel) {
-                chest = (Barrel) block.getState();
+            if (block.getState() instanceof org.bukkit.block.Chest chest) {
+                inventory = chest.getInventory();
+            } else if (block.getState() instanceof ShulkerBox shulkerBox) {
+                inventory = shulkerBox.getInventory();
+            } else if (block.getState() instanceof Barrel barrel) {
+                inventory = barrel.getInventory();
+            } else if (block.getState() instanceof DoubleChest doubleChest) {
+                inventory = doubleChest.getInventory();
             }
 
-            if (chest != null && hasRequiredItemsInChest(chest, requiredItems)) {
-                return true;
+            if (inventory != null) {
+                inventories.add(inventory);
             }
         }
-        return false;
+
+        VirtualInventory virtualInventory = new VirtualInventory(inventories);
+        return virtualInventory.hasItems(requiredItems);
     }
 
-
-    public static boolean hasEnoughStorageInChest(InventoryHolder chest, ItemStack[] itemsToStore) {
-        Inventory inventory = chest.getInventory();
-        Map<Material, Integer> requiredCounts = new HashMap<>();
-
-        for (ItemStack item : itemsToStore) {
-            if (item == null) {
-                continue;
-            }
-            requiredCounts.put(item.getType(), requiredCounts.getOrDefault(item.getType(), 0) + item.getAmount());
-        }
-
-        for (Map.Entry<Material, Integer> entry : requiredCounts.entrySet()) {
-            Material material = entry.getKey();
-            int requiredAmount = entry.getValue();
-
-            for (ItemStack inventoryItem : inventory.getContents()) {
-                if (inventoryItem != null && inventoryItem.getType() == material) {
-                    int availableSpace = inventoryItem.getMaxStackSize() - inventoryItem.getAmount();
-                    requiredAmount -= availableSpace;
-                    if (requiredAmount <= 0) {
-                        break;
-                    }
-                }
-            }
-
-            while (requiredAmount > 0) {
-                int emptySlot = inventory.firstEmpty();
-                if (emptySlot == -1) {
-                    return false;
-                }
-                requiredAmount -= material.getMaxStackSize();
-            }
-        }
-
-        return requiredCounts.values().stream().allMatch(count -> count <= 0);
+    private static String getItemKey(ItemStack item) {
+        ReadableNBT nbt = NBT.itemStackToNBT(item);
+        return item.getType().getKey().toString() + nbt.toString();
     }
 
     public static boolean hasEnoughInventorySpace(Player player, ItemStack[] itemsToStore) {
