@@ -26,6 +26,7 @@ public class ChestShop {
     private int maxDailyUses;
     private final ItemStack[] items;
     private final long dateTime;
+    private boolean admin;
     private boolean removed;
     private final Side signSide;
 
@@ -43,6 +44,7 @@ public class ChestShop {
         this.items = Utils.itemStackArrayFromBase64(data.getString("items"));
         this.dateTime = data.getLong("dateTime");
         this.signSide = data.getString("signSide") != null ? Side.valueOf(data.getString("signSide")) : Side.FRONT;
+        this.admin = data.get("admin");
         this.removed = data.get("removed");
     }
 
@@ -68,6 +70,15 @@ public class ChestShop {
         this.removed = removed;
         try {
             DB.executeUpdate("UPDATE `md_shops` SET `removed` = ? WHERE `id` = ?", removed, this.id);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void setAdmin(boolean admin) {
+        this.admin = admin;
+        try {
+            DB.executeUpdate("UPDATE `md_shops` SET `admin` = ? WHERE `id` = ?", admin, this.id);
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }

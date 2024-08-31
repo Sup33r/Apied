@@ -9,6 +9,9 @@ messages:
   shop:
     operationsleft: "<gray>Affärsoperationer kvar: <dark_gray>%count%</dark_gray></gray>"
     modify:
+      admin:
+        on: "<green>Kistaffären är nu en statlig affär.</green>"
+        off: "<green>Kistaffären är inte längre en statlig affär.</green>"
       maxPlayerDailyUses: "<green>Maxantalet spelarspecifika transaktioner per dag hos affären har ändrats till %count%.</green>"
       maxDailyUses: "<green>Maxantalet transaktioner per dag hos affären har ändrats till %count%.</green>"
       maxPlayerUses: "<green>Maxantalet spelarspecifika transaktioner hos affären har ändrats till %count%.</green>"

@@ -117,12 +117,7 @@ public class MPlayer {
 
     public void setFlags(String flags) {
         this.flags = flags.toCharArray();
-        DB.executeUpdateAsync(
-                "UPDATE `md_players` SET `flags` = "
-                        + Database.sqlString(flags)
-                        + " WHERE `uuid` = "
-                        + uuid
-                        + ";");
+        DB.executeUpdateAsync("UPDATE `md_players` SET `flags` = ? WHERE `uuid` = ?", flags, uuid);
     }
 
     public void addIgnore(UUID playerUUID) {

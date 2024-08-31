@@ -126,6 +126,7 @@ public class Database {
                                 `dateTime` bigint(30) DEFAULT NULL,
                                 `price` bigint(30) DEFAULT NULL,
                                 `items` text COLLATE utf8mb4_unicode_ci,
+                                `admin` tinyint(1) DEFAULT '0',
                                 `removed` tinyint(1) DEFAULT '0',
                                 PRIMARY KEY (`id`)
                               ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;""");
