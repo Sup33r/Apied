@@ -155,8 +155,8 @@ public class MPlayer {
 
     public void newHome(String name, Location location) {
         try {
-            DB.executeUpdate("INSERT INTO `md_homes` (`playerUUID`, `homeName`, `location`) VALUES (?, ?, ?)", uuid, name, Utils.locationToString(location));
-            homes.add(new Home(DB.getResults("SELECT * FROM `md_homes` WHERE `playerUUID` = " + Database.sqlString(uuid.toString()) + " AND `homeName` = " + Database.sqlString(name)).getFirst()));
+            DB.executeUpdate("INSERT INTO `md_homes` (`playerUUID`, `homeName`, `location`) VALUES (?, ?, ?)", uuid.toString(), name, Utils.locationToString(location));
+            homes.add(new Home(DB.getResults("SELECT * FROM `md_homes` WHERE `playerUUID` = ? AND `homeName` = ?", uuid.toString(), name).getFirst()));
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
