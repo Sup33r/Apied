@@ -3,6 +3,7 @@ package live.supeer.apied;
 import co.aikar.idb.DB;
 import co.aikar.idb.DbRow;
 import lombok.Getter;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 
 import java.sql.SQLException;
@@ -116,9 +117,14 @@ public class MPlayer {
     }
 
     public void setFlags(String flags) {
-        this.flags = flags.toCharArray();
-        DB.executeUpdateAsync("UPDATE `md_players` SET `flags` = ? WHERE `uuid` = ?", flags, uuid);
+        if (flags == null || flags.isEmpty()) {
+            this.flags = new char[0];
+        } else {
+            this.flags = flags.toCharArray();
+        }
+        DB.executeUpdateAsync("UPDATE `md_players` SET `flags` = " + Database.sqlString(flags) + " WHERE `uuid` = " + Database.sqlString(uuid.toString()));
     }
+
 
     public void addIgnore(UUID playerUUID) {
         if (!ignores.contains(playerUUID)) {
@@ -149,8 +155,8 @@ public class MPlayer {
 
     public void newHome(String name, Location location) {
         try {
-            DB.executeUpdate("INSERT INTO `md_homes` (`playerUUID`, `name`, `location`) VALUES (?, ?, ?)", uuid, name, Utils.locationToString(location));
-            homes.add(new Home(DB.getResults("SELECT * FROM `md_homes` WHERE `playerUUID` = " + Database.sqlString(uuid.toString()) + " AND `name` = " + Database.sqlString(name)).getFirst()));
+            DB.executeUpdate("INSERT INTO `md_homes` (`playerUUID`, `homeName`, `location`) VALUES (?, ?, ?)", uuid, name, Utils.locationToString(location));
+            homes.add(new Home(DB.getResults("SELECT * FROM `md_homes` WHERE `playerUUID` = " + Database.sqlString(uuid.toString()) + " AND `homeName` = " + Database.sqlString(name)).getFirst()));
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -158,12 +164,17 @@ public class MPlayer {
 
     public void removeHome(Home home) {
         homes.remove(home);
-        DB.executeUpdateAsync("DELETE FROM `md_homes` WHERE `playerUUID` = " + Database.sqlString(uuid.toString()) + " AND `name` = " + Database.sqlString(home.getName()));
+        DB.executeUpdateAsync("DELETE FROM `md_homes` WHERE `playerUUID` = " + Database.sqlString(uuid.toString()) + " AND `homeName` = " + Database.sqlString(home.getName()));
     }
 
     public void setChatprefix(String chatprefix) {
         this.chatprefix = chatprefix;
         DB.executeUpdateAsync("UPDATE `md_players` SET `chatprefix` = " + Database.sqlString(chatprefix) + " WHERE `uuid` = " + Database.sqlString(uuid.toString()));
+    }
+
+    public void removeChatprefix() {
+        this.chatprefix = null;
+        DB.executeUpdateAsync("UPDATE `md_players` SET `chatprefix` = NULL WHERE `uuid` = " + Database.sqlString(uuid.toString()));
     }
 
     public void setLatestJoin(long latestJoin) {

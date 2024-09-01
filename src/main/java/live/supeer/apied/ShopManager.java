@@ -14,6 +14,7 @@ import org.bukkit.Material;
 import org.bukkit.block.*;
 import org.bukkit.block.sign.Side;
 import org.bukkit.block.sign.SignSide;
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
@@ -280,12 +281,12 @@ public class ShopManager {
             }
         }
         if (chestShop.getType().equals("BUY")) {
-            if (!hasRequiredItemsInChests(chestShop.getChestLocations(), chestShop.getItems())) {
+            if (!hasRequiredItemsInChests(chestShop.getChestLocations(), chestShop.getItems()) && !chestShop.isAdmin()) {
                 Apied.sendMessage(player, "messages.shop.error.missingItems");
                 formatSign(sign, chestShop);
                 return;
             }
-            if (!hasEnoughInventorySpace(player, chestShop.getItems()) && !chestShop.isAdmin()) {
+            if (!hasEnoughInventorySpace(player, chestShop.getItems())) {
                 Apied.sendMessage(player, "messages.shop.error.fullInventory");
                 formatSign(sign, chestShop);
                 return;
@@ -315,7 +316,7 @@ public class ShopManager {
             if (mPlayer == null) {
                 return;
             }
-            if (chestShop.getPrice() > mPlayer.getBalance()) {
+            if (chestShop.getPrice() > mPlayer.getBalance() && !chestShop.isAdmin()) {
                 Apied.sendMessage(player, "messages.shop.error.ownerInsufficientFunds");
                 formatSign(sign, chestShop);
                 return;
@@ -341,10 +342,14 @@ public class ShopManager {
                 }
                 if (chestShop.isAdmin()) {
                     chestShop.setAdmin(false);
-                    Apied.sendMessage(player, "messages.shop.modify.admin.on");
+                    Apied.sendMessage(player, "messages.shop.modify.admin.isAdmin");
                 } else {
                     chestShop.setAdmin(true);
-                    Apied.sendMessage(player, "messages.shop.modify.admin.off");
+                    Apied.sendMessage(player, "messages.shop.modify.admin.isNotAdmin");
+                }
+                decrementChestEventCount(player.getUniqueId());
+                if (shopEventCount.count > 0) {
+                    Apied.sendMessage(player, "messages.shop.operationsleft", "%count%", String.valueOf(shopEventCount.count));
                 }
             }
             case "maxUses" -> {
@@ -416,13 +421,6 @@ public class ShopManager {
         List<Location> chestLocations = chestShop.getChestLocations();
         ItemStack[] itemsToBuy = chestShop.getItems();
         Sign sign = (Sign) chestShop.getSignLocation().getBlock().getState();
-        // Ensure that the required items are available in the chests
-        if (!hasRequiredItemsInChests(chestLocations, itemsToBuy)) {
-            Apied.sendMessage(player, "messages.shop.error.missingItems");
-            formatSign(sign, chestShop);
-            return;
-        }
-
         // Attempt to remove items from chests
         for (ItemStack item : itemsToBuy) {
             if (!chestShop.isAdmin()) {
@@ -440,7 +438,9 @@ public class ShopManager {
                 Apied.getInstance().getLogger().warning("The buyer or seller of a signshop transaction is null. Buyer: " + buyer + ", Seller: " + seller);
                 return;
             }
-            if (!buyer.getUuid().equals(seller.getUuid())) {
+            if (chestShop.isAdmin()) {
+                buyer.removeBalance(chestShop.getPrice(), "{ \"type\": \"shop\", \"subtype\": \"buyAdmin\", \"shopId\": " + chestShop.getId() + "}");
+            } else if (!buyer.getUuid().equals(seller.getUuid())) {
                 buyer.removeBalance(chestShop.getPrice(), "{ \"type\": \"shop\", \"subtype\": \"buySelf\", \"playerUUID\": \"" + seller.getUuid() + "\", \"shopId\": " + chestShop.getId() + "}");
                 seller.addBalance(chestShop.getPrice(), "{ \"type\": \"shop\", \"subtype\": \"buyOther\", \"playerUUID\": \"" + buyer.getUuid() + "\", \"shopId\": " + chestShop.getId() + "}");
             }
@@ -479,7 +479,9 @@ public class ShopManager {
                 Apied.getInstance().getLogger().warning("The buyer or seller of a signshop transaction is null. Buyer: " + buyer + ", Seller: " + seller);
                 return;
             }
-            if (!buyer.getUuid().equals(seller.getUuid())) {
+            if (chestShop.isAdmin()) {
+                seller.addBalance(chestShop.getPrice(), "{ \"type\": \"shop\", \"subtype\": \"sellAdmin\", \"shopId\": " + chestShop.getId() + "}");
+            } else if (!buyer.getUuid().equals(seller.getUuid())) {
                 seller.addBalance(chestShop.getPrice(), "{ \"type\": \"shop\", \"subtype\": \"sellSelf\", \"playerUUID\": \"" + buyer.getUuid() + "\", \"shopId\": " + chestShop.getId() + "}");
                 buyer.removeBalance(chestShop.getPrice(), "{ \"type\": \"shop\", \"subtype\": \"sellOther\", \"playerUUID\": \"" + seller.getUuid() + "\", \"shopId\": " + chestShop.getId() + "}");
             }
@@ -677,7 +679,7 @@ public class ShopManager {
         TextComponent comp2 = null;
         String type;
 
-        if (chestShop == null) {
+        if (chestShop == null || chestShop.isAdmin()) {
             type = getType(sign);
             if (type == null) {
                 return;
