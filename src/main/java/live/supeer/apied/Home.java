@@ -22,6 +22,6 @@ public class Home {
 
     public void updateHomeLocation(Location location) {
         this.location = location;
-        DB.executeUpdateAsync("UPDATE `md_homes` SET `location` = " + Utils.locationToString(location) + " WHERE `playerUUID` = " + playerUUID.toString() + " AND `homeName` = " + Database.sqlString(name) + ";");
+        DB.executeUpdateAsync("UPDATE `md_homes` SET `location` = ? WHERE `playerUUID` = ? AND `homeName` = ?;", Utils.locationToString(location), playerUUID.toString(), name);
     }
 }

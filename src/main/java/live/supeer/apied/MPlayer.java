@@ -28,6 +28,7 @@ public class MPlayer {
     private Location lastLocation;
     private Location backLocation;
     private boolean isBanned;
+    private boolean modzoneAccess;
 
     public MPlayer(DbRow data) {
         this.uuid = UUID.fromString(data.getString("uuid"));
@@ -48,8 +49,9 @@ public class MPlayer {
                 .map(Utils::stringToLocation)
                 .orElse(null);
         this.isBanned = MPlayerManager.isBanned(uuid);
+        this.modzoneAccess = data.get("modzoneAccess");
         try {
-            DB.getResults("SELECT * FROM `md_homes` WHERE `playerUUID` = " + Database.sqlString(uuid.toString())).forEach(row -> homes.add(new Home(row)));
+            DB.getResults("SELECT * FROM `md_homes` WHERE `playerUUID` = ?", uuid.toString()).forEach(row -> homes.add(new Home(row)));
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -58,7 +60,7 @@ public class MPlayer {
     public void setLastLocation(Location lastLocation) {
         try {
             this.lastLocation = lastLocation;
-            DB.executeUpdate("UPDATE `md_players` SET `location` = " + Database.sqlString(Utils.locationToString(lastLocation)) + " WHERE `uuid` = " + Database.sqlString(uuid.toString()));
+            DB.executeUpdate("UPDATE `md_players` SET `location` = ? WHERE `uuid` = ?", Utils.locationToString(lastLocation), uuid.toString());
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -67,7 +69,7 @@ public class MPlayer {
     public void setBackLocation(Location backLocation) {
         try {
             this.backLocation = backLocation;
-            DB.executeUpdate("UPDATE `md_players` SET `backLocation` = " + Database.sqlString(Utils.locationToString(backLocation)) + " WHERE `uuid` = " + Database.sqlString(uuid.toString()));
+            DB.executeUpdate("UPDATE `md_players` SET `backLocation` = ? WHERE `uuid` = ?", Utils.locationToString(backLocation), uuid.toString());
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -77,7 +79,7 @@ public class MPlayer {
         try {
             Database.createBalanceLogEntry(uuid, balance, newBalance, json);
             this.balance = newBalance;
-            DB.executeUpdate("UPDATE `md_players` SET `balance` = " + newBalance + " WHERE `uuid` = " + Database.sqlString(uuid.toString()));
+            DB.executeUpdate("UPDATE `md_players` SET `balance` = ? WHERE `uuid` = ?", newBalance, uuid.toString());
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -87,7 +89,7 @@ public class MPlayer {
         try {
             Database.createBalanceLogEntry(uuid, balance, balance + amount, json);
             this.balance += amount;
-            DB.executeUpdate("UPDATE `md_players` SET `balance` = " + balance + " WHERE `uuid` = " + Database.sqlString(uuid.toString()));
+            DB.executeUpdate("UPDATE `md_players` SET `balance` = ? WHERE `uuid` = ?", balance + amount, uuid.toString());
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -97,7 +99,7 @@ public class MPlayer {
         try {
             Database.createBalanceLogEntry(uuid, balance, balance - amount, json);
             this.balance -= amount;
-            DB.executeUpdate("UPDATE `md_players` SET `balance` = " + balance + " WHERE `uuid` = " + Database.sqlString(uuid.toString()));
+            DB.executeUpdate("UPDATE `md_players` SET `balance` = ? WHERE `uuid` = ?", balance, uuid.toString());
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -122,21 +124,26 @@ public class MPlayer {
         } else {
             this.flags = flags.toCharArray();
         }
-        DB.executeUpdateAsync("UPDATE `md_players` SET `flags` = " + Database.sqlString(flags) + " WHERE `uuid` = " + Database.sqlString(uuid.toString()));
+        DB.executeUpdateAsync("UPDATE `md_players` SET `flags` = ? WHERE `uuid` = ?", flags, uuid.toString());
+    }
+
+    public void setModzoneAccess(boolean modzoneAccess) {
+        this.modzoneAccess = modzoneAccess;
+        DB.executeUpdateAsync("UPDATE `md_players` SET `modzoneAccess` = ? WHERE `uuid` = ?", modzoneAccess, uuid.toString());
     }
 
 
     public void addIgnore(UUID playerUUID) {
         if (!ignores.contains(playerUUID)) {
             ignores.add(playerUUID);
-            DB.executeUpdateAsync("UPDATE `md_players` SET `ignores` = " + Database.sqlString(Utils.uuidListToString(ignores)) + " WHERE `uuid` = " + Database.sqlString(uuid.toString()));
+            DB.executeUpdateAsync("UPDATE `md_players` SET `ignores` = ? WHERE `uuid` = ?", Utils.uuidListToString(ignores), uuid.toString());
         }
     }
 
     public void removeIgnore(UUID playerUUID) {
         if (ignores.contains(playerUUID)) {
             ignores.remove(playerUUID);
-            DB.executeUpdateAsync("UPDATE `md_players` SET `ignores` = " + Database.sqlString(Utils.uuidListToString(ignores)) + " WHERE `uuid` = " + Database.sqlString(uuid.toString()));
+            DB.executeUpdateAsync("UPDATE `md_players` SET `ignores` = ? WHERE `uuid` = ?", Utils.uuidListToString(ignores), uuid.toString());
         }
     }
 
@@ -164,32 +171,32 @@ public class MPlayer {
 
     public void removeHome(Home home) {
         homes.remove(home);
-        DB.executeUpdateAsync("DELETE FROM `md_homes` WHERE `playerUUID` = " + Database.sqlString(uuid.toString()) + " AND `homeName` = " + Database.sqlString(home.getName()));
+        DB.executeUpdateAsync("DELELTE FROM `md_homes` WHERE `playerUUID` = ? AND `homeName` = ?", uuid.toString(), home.getName());
     }
 
     public void setChatprefix(String chatprefix) {
         this.chatprefix = chatprefix;
-        DB.executeUpdateAsync("UPDATE `md_players` SET `chatprefix` = " + Database.sqlString(chatprefix) + " WHERE `uuid` = " + Database.sqlString(uuid.toString()));
+        DB.executeUpdateAsync("UPDATE `md_players` SET `chatprefix` = ? WHERE `uuid` = ?", chatprefix, uuid.toString());
     }
 
     public void removeChatprefix() {
         this.chatprefix = null;
-        DB.executeUpdateAsync("UPDATE `md_players` SET `chatprefix` = NULL WHERE `uuid` = " + Database.sqlString(uuid.toString()));
+        DB.executeUpdateAsync("UPDATE `md_players` SET `chatprefix` = NULL WHERE `uuid` = ?", uuid.toString());
     }
 
     public void setLatestJoin(long latestJoin) {
         this.latestJoin = latestJoin;
-        DB.executeUpdateAsync("UPDATE `md_players` SET `latestJoin` = " + latestJoin + " WHERE `uuid` = " + Database.sqlString(uuid.toString()));
+        DB.executeUpdateAsync("UPDATE `md_players` SET `latestJoin` = ? WHERE `uuid` = ?", latestJoin, uuid.toString());
     }
 
     public void setLatestLeave(long latestLeave) {
         this.latestLeave = latestLeave;
-        DB.executeUpdateAsync("UPDATE `md_players` SET `latestLeave` = " + latestLeave + " WHERE `uuid` = " + Database.sqlString(uuid.toString()));
+        DB.executeUpdateAsync("UPDATE `md_players` SET `latestLeave` = ? WHERE `uuid` = ?", latestLeave, uuid.toString());
     }
 
     public void changeName(String name) {
         this.name = name;
-        DB.executeUpdateAsync("UPDATE `md_players` SET `name` = " + Database.sqlString(name) + " WHERE `uuid` = " + Database.sqlString(uuid.toString()));
+        DB.executeUpdateAsync("UPDATE `md_players` SET `name` = ? WHERE `uuid` = ?", name, uuid.toString());
         try {
             DB.executeInsert("INSERT INTO `md_namechanges` (`playerUUID`, `playerName`, `dateTime`) VALUES (?, ?, ?)", uuid.toString(), name, Utils.getTimestamp());
         } catch (SQLException e) {

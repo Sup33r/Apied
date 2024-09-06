@@ -35,10 +35,6 @@ public class Database {
 //        }
 //    }
 
-    public static String sqlString(String string) {
-        return string == null ? "NULL" : "'" + string.replace("\\", "\\\\").replace("'", "\\'") + "'";
-    }
-
     public static void createTables() {
         try {
 
@@ -57,6 +53,7 @@ public class Database {
                                 `chatChannel` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
                                 `location` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
                                 `backLocation` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+                                `modzoneAccess` tinyint(1) DEFAULT '0',
                                 PRIMARY KEY (`uuid`)
                               ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;""");
             DB.executeUpdate(
@@ -147,7 +144,7 @@ public class Database {
 
     public static void createBalanceLogEntry(UUID uuid, int balanceBefore, int balanceAfter, String reason) {
         try {
-            DB.executeUpdate("INSERT INTO md_balancelogs (playerUUID, dateTime, balanceBefore, balanceAfter, jsonLog) VALUES (?, ?, ?, ?, ?)", uuid.toString(), Utils.getTimestamp(), balanceBefore, balanceAfter, Database.sqlString(reason));
+            DB.executeUpdate("INSERT INTO md_balancelogs (playerUUID, dateTime, balanceBefore, balanceAfter, jsonLog) VALUES (?, ?, ?, ?, ?)", uuid.toString(), Utils.getTimestamp(), balanceBefore, balanceAfter, reason);
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
