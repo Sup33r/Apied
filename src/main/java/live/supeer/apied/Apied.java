@@ -20,6 +20,7 @@ import java.util.HashMap;
     private static LanguageManager languageManager;
 
     public static HashMap<Player, String> goSigns = new HashMap<>();
+    public static HashMap<Player, Integer> signEdit = new HashMap<>();
 
 
      @Override
