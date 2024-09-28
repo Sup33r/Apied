@@ -91,3 +91,8 @@ messages:
     share:
       started: "<green>Du delar nu kistan med %player%.</green>"
       stopped: "<red>Du delar inte längre kistan med %player%.</red>"
+
+  chat:
+    prefix:
+      tab:
+        mod: "<dark_aqua>[</dark_aqua><aqua>M</aqua><dark_aqua>]</dark_aqua> %player%"

@@ -8,6 +8,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.HashMap;
+
  public final class Apied extends JavaPlugin {
 
     private static Apied plugin;
@@ -17,9 +19,10 @@ import org.jetbrains.annotations.NotNull;
     public static ApiedConfig configuration;
     private static LanguageManager languageManager;
 
+    public static HashMap<Player, String> goSigns = new HashMap<>();
 
 
-    @Override
+     @Override
     public void onEnable() {
         plugin = this;
         configuration = new ApiedConfig(this);
@@ -60,6 +63,10 @@ import org.jetbrains.annotations.NotNull;
              return languageManager.getMiniMessage().deserialize(message);
          }
          return null;
+     }
+
+     public static Component stringToMiniMessage(String message) {
+         return languageManager.getMiniMessage().deserialize(message);
      }
 
      public static String componentToMiniMessage(Component component) {
