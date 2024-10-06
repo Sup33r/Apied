@@ -3,7 +3,6 @@ package live.supeer.apied;
 import co.aikar.idb.DB;
 import co.aikar.idb.DbRow;
 import lombok.Getter;
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 
 import java.sql.SQLException;

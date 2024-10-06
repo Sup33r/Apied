@@ -42,7 +42,9 @@ public class ApiedAPI {
         }
         String playerName = player.getName();
         if (afk) {
-            playerName = "<italic>" + playerName + "</italic>";
+            playerName = "<gray><italic>" + playerName + "</italic></gray>";
+        } else {
+            playerName = "<gray>" + playerName + "</gray>";
         }
         if (mPlayer.getChatprefix() != null && !mPlayer.getChatprefix().isEmpty()) {
             return Apied.stringToMiniMessage(mPlayer.getChatprefix() + playerName);

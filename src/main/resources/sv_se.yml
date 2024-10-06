@@ -95,4 +95,4 @@ messages:
   chat:
     prefix:
       tab:
-        mod: "<dark_aqua>[</dark_aqua><aqua>M</aqua><dark_aqua>]</dark_aqua> %player%"
+        mod: "<#FF3561>ᴍᴏᴅ %player%"
