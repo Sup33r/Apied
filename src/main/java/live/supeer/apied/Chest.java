@@ -3,7 +3,6 @@ package live.supeer.apied;
 import co.aikar.idb.DB;
 import co.aikar.idb.DbRow;
 import lombok.Getter;
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 
 import java.sql.SQLException;
@@ -45,7 +44,7 @@ public class Chest {
     public void setType(ChestType type) {
         this.type = type;
         try {
-            DB.executeUpdate("UPDATE `md_chests` SET `type` = ? WHERE `id` = ?", type.getType(), this.id);
+            DB.executeUpdate("UPDATE `md_chests` SET `type` = ? WHERE `id` = ?", type.type(), this.id);
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }

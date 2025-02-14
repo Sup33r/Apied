@@ -4,7 +4,6 @@ import co.aikar.idb.DB;
 import co.aikar.idb.DbRow;
 import lombok.Getter;
 import org.bukkit.Location;
-import org.bukkit.Material;
 import org.bukkit.block.Barrel;
 import org.bukkit.block.Block;
 import org.bukkit.block.Chest;
@@ -131,7 +130,7 @@ public class ChestManager {
         if (block.getState() instanceof Chest chest) {
             Inventory inventory = chest.getInventory();
             if (inventory instanceof DoubleChestInventory doubleChestInventory) {
-                type = ChestType.DOUBLE.getType();
+                type = ChestType.DOUBLE.type();
                 live.supeer.apied.Chest chest1 = getClaimedChest(doubleChestInventory.getLeftSide().getLocation());
                 live.supeer.apied.Chest chest2 = getClaimedChest(doubleChestInventory.getRightSide().getLocation());
                 if (chest1 == null && chest2 == null) {
@@ -148,7 +147,7 @@ public class ChestManager {
                     }
                 }
             } else {
-                type = ChestType.SINGLE.getType();
+                type = ChestType.SINGLE.type();
                 live.supeer.apied.Chest chest1 = getClaimedChest(chest.getLocation());
                 if (chest1 == null) {
                     newChest(location, player, type);
@@ -165,7 +164,7 @@ public class ChestManager {
             return;
         }
         if (block.getState() instanceof Barrel barrel) {
-            type = ChestType.BARREL.getType();
+            type = ChestType.BARREL.type();
             live.supeer.apied.Chest chest = getClaimedChest(barrel.getLocation());
             if (chest == null) {
                 newChest(location, player, type);
@@ -181,7 +180,7 @@ public class ChestManager {
             return;
         }
         if (block.getState() instanceof ShulkerBox shulkerBox) {
-            type = ChestType.SHULKER.getType();
+            type = ChestType.SHULKER.type();
             live.supeer.apied.Chest chest = getClaimedChest(shulkerBox.getLocation());
             if (chest == null) {
                 newChest(location, player, type);

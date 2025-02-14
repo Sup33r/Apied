@@ -1,6 +1,6 @@
 messages:
   word:
-    currency: "encoins"
+    currency: "coins"
     for: "för"
     count:
       plural: "stycken"
@@ -18,17 +18,17 @@ messages:
       maxUses: "<green>Maxantalet transaktioner hos affären har ändrats till %count%.</green>"
     recap:
       header: "<dark_aqua>--- <aqua>Affärshändelser senaste 15 minuterna</aqua> ---</dark_aqua>"
-      sold: "<aqua>Dina affärer har sålt för +%amount% encoins.</aqua>"
-      bought: "<aqua>Dina affärer har köpt för -%amount% encoins.</aqua>"
+      sold: "<aqua>Dina affärer har sålt för +%amount% coins.</aqua>"
+      bought: "<aqua>Dina affärer har köpt för -%amount% coins.</aqua>"
     confirm:
       sell:
-        single: "<yellow>Klicka en gång till om du vill sälja %item% för %price% encoins.</yellow>"
+        single: "<yellow>Klicka en gång till om du vill sälja %item% för %price% coins.</yellow>"
         multiple: "<yellow>Klicka en gång till om du vill sälja...\n%items%</yellow>"
       buy:
-        single: "<yellow>Klicka en gång till om du vill köpa %item% för %price% encoins.</yellow>"
+        single: "<yellow>Klicka en gång till om du vill köpa %item% för %price% coins.</yellow>"
         multiple: "<yellow>Klicka en gång till om du vill köpa...\n%items%</yellow>"
     sign:
-      price: "<black>%price% encoins</black>"
+      price: "<black>%price% coins</black>"
       stocked:
         buy: "<dark_blue><underlined>KÖP</underlined></dark_blue>"
         sell: "<dark_blue><underlined>SÄLJ</underlined></dark_blue>"
@@ -37,10 +37,10 @@ messages:
         sell: "<dark_red><underlined>SÄLJ</underlined></dark_red>"
     success:
       sell:
-        single: "<green>Du har sålt %item% för %price% encoins.</green>"
+        single: "<green>Du har sålt %item% för %price% coins.</green>"
         multiple: "<green>Du har sålt...\n%items%</green>"
       buy:
-        single: "<green>Du har köpt %item% för %price% encoins.</green>"
+        single: "<green>Du har köpt %item% för %price% coins.</green>"
         multiple: "<green>Du har köpt...\n%items%</green>"
       addChest: "<green>Kistan har lagts till som lager i affären.</green>"
       create:
@@ -50,7 +50,7 @@ messages:
       notFound: "<red>Affären kunde inte hittas.</red>"
       empty: "<red>Kistan är tom, och kan därför inte användas som lager.</red>"
       noBalance: "<red>Priset på skyltaffären kan inte vara noll.</red>"
-      maxPrice: "<red>Priset på skyltaffären överstiger maxgränsen på %max% encoins.</red>"
+      maxPrice: "<red>Priset på skyltaffären överstiger maxgränsen på %max% coins.</red>"
       insufficientFunds: "<red>Du har inte råd att genomföra köpet.</red>"
       ownerInsufficientFunds: "<red>Ägaren av affären har inte råd att köpa dina föremål.</red>"
       maxUses: "<red>Affären har uppnått sin gräns för antalet transaktioner.</red>"

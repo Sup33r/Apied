@@ -6,8 +6,8 @@ import java.util.UUID;
 
 @Getter
 public class ExpiringBan {
-    private UUID playerUUID;
-    private long unbanTime;
+    private final UUID playerUUID;
+    private final long unbanTime;
 
     public ExpiringBan(UUID playerUUID, long unbanTime) {
         this.playerUUID = playerUUID;

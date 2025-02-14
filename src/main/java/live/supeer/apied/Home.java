@@ -11,8 +11,8 @@ import java.util.UUID;
 public class Home {
 
     private Location location;
-    private UUID playerUUID;
-    private String name;
+    private final UUID playerUUID;
+    private final String name;
 
     public Home(DbRow data) {
         this.location = Utils.stringToLocation(data.getString("location"));

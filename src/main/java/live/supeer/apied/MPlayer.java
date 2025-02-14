@@ -13,9 +13,9 @@ import java.util.UUID;
 
 @Getter
 public class MPlayer {
-    private UUID uuid;
+    private final UUID uuid;
     private String name;
-    private long firstJoin;
+    private final long firstJoin;
     private long latestJoin;
     private long latestLeave;
     private char[] flags;
